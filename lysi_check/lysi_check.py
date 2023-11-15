@@ -646,6 +646,7 @@ def read_data(path, relevant_files, type_selector):
 def reset_data():
     st.session_state["datasets"] = None
     st.session_state["read_path"] = None
+    st.session_state["ec_data"] = None
 
 
 with st.sidebar:
@@ -848,7 +849,7 @@ try:
                                 index=False,
                             )
                     reset_data()
-                    # st.rerun()
+                    st.rerun()
 
             # Display lysimeter plots for gap check
             ################################################################################################
@@ -1476,8 +1477,7 @@ try:
                                     print(e)
                                     st.session_state["influxdb_error"] = True
 
-                        st.session_state["read_path"] = None
-                        st.session_state["datasets"] = None
+                        reset_data()
                         st.rerun()
 
             # Display lysimeter plots for postprocessing
