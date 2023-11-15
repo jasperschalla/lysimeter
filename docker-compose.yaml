@@ -1,0 +1,61 @@
+version: '3'
+
+services:
+  watcher:
+    build: ./
+    container_name: lysi_input_watcher
+    volumes:
+      - ../processing/excel/:/usr/app/src/excel
+      - ../processing/watch/:/usr/app/src/watch
+      - ../processing/balance_filled/:/usr/app/src/balance_filled
+      - ../processing/balance_post/:/usr/app/src/balance_post
+      - ../processing/balance_finished/:/usr/app/src/balance_finished
+      - ../processing/additional_filled/:/usr/app/src/additional_filled
+      - ../processing/additional_post/:/usr/app/src/additional_post
+      - ../processing/additional_finished/:/usr/app/src/additional_finished
+      - ../lysi_data.log:/usr/app/src/lysi_data.log
+      - ../lysimeter_matches.json:/usr/app/src/lysimeter_matches.json
+    env_file:
+      - ./.env
+  grafana:
+   platform: linux/x86_64
+   image: grafana/grafana
+   container_name: lysi_grafana
+   env_file:
+      - ./grafana_secrets.env
+   ports:
+     - "3001:3000"
+   volumes:
+     - grafana_data:/var/lib/grafana
+  lysi_pipe:
+    build: ./lysi_pipe/
+    container_name: lysi_pipe
+    volumes:
+      - ../processing/balance_filled/:/usr/app/src/balance_filled
+      - ../processing/balance_post/:/usr/app/src/balance_post
+      - ../processing/balance_finished/:/usr/app/src/balance_finished
+      - ../processing/additional_filled/:/usr/app/src/additional_filled
+      - ../processing/additional_post/:/usr/app/src/additional_post
+      - ../processing/additional_finished/:/usr/app/src/additional_finished
+      - ../lysi_data.log:/usr/app/src/lysi_data.log
+    ports:
+      - "8502:8502"
+  lysi_check:
+    build: ./lysi_check/
+    container_name: lysi_check
+    volumes:
+      - ../processing/balance_filled/:/usr/app/src/balance_filled
+      - ../processing/balance_post/:/usr/app/src/balance_post
+      - ../processing/balance_finished/:/usr/app/src/balance_finished
+      - ../processing/additional_filled/:/usr/app/src/additional_filled
+      - ../processing/additional_post/:/usr/app/src/additional_post
+      - ../processing/additional_finished/:/usr/app/src/additional_finished
+      - ../lysimeter_matches.json:/usr/app/src/lysimeter_matches.json
+      - ../processing/awat/:/usr/app/src/awat
+    ports:
+      - "8501:8501"
+    env_file:
+      - ./.env
+
+volumes:
+  grafana_data: 
