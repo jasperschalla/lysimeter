@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+# -*-coding:utf-8 -*-
+"""
+@File     :resolve_post_errors.py
+@Time     :2023/11/15 14:40:23
+@Author   :Jasper Schalla
+@Contact  :jasper.schalla@web.de
+"""
+
 import os
 import subprocess
 import re

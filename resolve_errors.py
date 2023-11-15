@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+# -*-coding:utf-8 -*-
+"""
+@File     :resolve_errors.py
+@Time     :2023/11/15 14:40:16
+@Author   :Jasper Schalla
+@Contact  :jasper.schalla@web.de
+"""
+
 import os
 import re
 import subprocess

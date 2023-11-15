@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+# -*-coding:utf-8 -*-
+"""
+@File     :copy_old.py
+@Time     :2023/11/15 14:39:47
+@Author   :Jasper Schalla
+@Contact  :jasper.schalla@web.de
+"""
+
 import shutil
 import os
 import datetime

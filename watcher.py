@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+# -*-coding:utf-8 -*-
+"""
+@File     :watcher.py
+@Time     :2023/11/15 14:40:32
+@Author   :Jasper Schalla
+@Contact  :jasper.schalla@web.de
+"""
+
 import time
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent
