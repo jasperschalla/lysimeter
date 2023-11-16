@@ -2094,6 +2094,7 @@ try:
                         if st.button("Fetch Data", type="primary"):
                             fetch_ec(data, location_selector)
 
+                        # Check if data has been fetched
                         if "ec_data" in st.session_state:
                             ec_data = st.session_state.ec_data
 
@@ -2115,6 +2116,7 @@ try:
                                     "At the moment the evapotranspiration is estimated using the penmon method based on the 'penmon' python package. Due to the lack of data it is only based on the min and max temperature as well as on the day of the year as well as all metrices that can be derived from that."
                                 )
 
+                            # If albedo method is selected, the user can select the threshold and the length of the thaw period afterwards
                             if winter_type_selector == "albedo":
                                 st.info(
                                     "The albedo method is not implemented yet. Please use the manual method."
@@ -2185,7 +2187,9 @@ try:
 
                                 st.plotly_chart(fig_albedo, use_container_width=True)
 
+                                # If gaps in the middle should be filled
                                 if close_gaps:
+                                    # Filter data for albedo values above threshold
                                     albedo_fills = ec_data[
                                         ec_data["Albedo"] >= albedo_threshold
                                     ].sort_values(by=[ec_data.columns[0]])
@@ -2193,9 +2197,10 @@ try:
                                     pluvio_end_date_temp = albedo_fills.iloc[
                                         (albedo_fills.shape[0] - 1), 0
                                     ]
-
+                                    # Add thaw period to the end date
                                     pluvio_end_date = pluvio_end_date_temp + timedelta
 
+                                    # Filter data for the given date range
                                     pluvio_df = ec_data[
                                         (
                                             ec_data[ec_data.columns[0]]
@@ -2206,13 +2211,14 @@ try:
                                             <= pluvio_end_date
                                         )
                                     ]
-
+                                    # If the parameter is precipitation and there are enough values to fill the lysimeter data, a regression model is applied
                                     if (
                                         param_selector_post == "Precipitation"
                                         and not pluvio_df.shape[0]
                                         >= (data[col_selector_post].shape[0] - 1)
                                     ):
                                         model = sm.OLS(
+                                            # Filter data for the given date range
                                             data[
                                                 ~data[data.columms[0]].isin(
                                                     pluvio_df[
@@ -2221,6 +2227,7 @@ try:
                                                 )
                                             ][col_selector_post].values.reshape(-1, 1),
                                             sm.add_constant(
+                                                # Filter data for the given date range
                                                 ec_data[
                                                     ~ec_data[ec_data.columns[0]].isin(
                                                         pluvio_df[
@@ -2241,22 +2248,25 @@ try:
                                         pluvio_df[
                                             "precipitation_filled"
                                         ] = pluvio_fill_values
+                                    # If the parameter is evapotranspiration, the precipitation values are filled with NA
                                     else:
                                         pluvio_df["precipitation_filled"] = [
                                             np.nan
                                         ] * pluvio_df.shape[0]
-
+                                # If gaps in the middle should not be filled
                                 else:
                                     albedo_fills = ec_data[
                                         ec_data["Albedo"] >= albedo_threshold
                                     ].sort_values(by=[ec_data.columns[0]])
 
+                                    # If the parameter is precipitation and there are enough values to fill the lysimeter data, a regression model is applied
                                     if (
                                         param_selector_post == "Precipitation"
                                         and not albedo_fills.shape[0]
                                         >= (data[col_selector_post].shape[0] - 1)
                                     ):
                                         model = sm.OLS(
+                                            # Filter data for the given date range
                                             data[
                                                 ~data[data.columns[0]].isin(
                                                     albedo_fills[
@@ -2265,6 +2275,7 @@ try:
                                                 )
                                             ][col_selector_post].values.reshape(-1, 1),
                                             sm.add_constant(
+                                                # Filter data for the given date range
                                                 ec_data[
                                                     ~ec_data[ec_data.columns[0]].isin(
                                                         albedo_fills[
@@ -2277,6 +2288,7 @@ try:
                                         )
                                         lm = model.fit()
 
+                                    # Calculate the time difference between the albedo values
                                     timestep = (
                                         albedo_fills[albedo_fills.columns[0]]
                                         .diff()
@@ -2287,7 +2299,9 @@ try:
                                         albedo_fills[albedo_fills.columns[0]] / timestep
                                     ).tolist()
 
+                                    # Add the time difference to the dataframe
                                     albedo_fills.loc[:, "timedelta"] = time_diff
+                                    # Group the data by the time difference
                                     albedo_fills.loc[:, "timedelta_groups"] = np.where(
                                         albedo_fills["timedelta"] != 1.0, "start", None
                                     )
@@ -2295,10 +2309,12 @@ try:
                                         albedo_fills["timedelta_groups"] == "start"
                                     ]
 
+                                    # Split the data into groups
                                     groups = []
                                     for index, group_index in enumerate(
                                         group_start_indices
                                     ):
+                                        # If it is not the last group, the group is from the start index to the next start index
                                         if not (index + 1) == len(group_start_indices):
                                             groups.append(
                                                 albedo_fills.loc[
@@ -2317,6 +2333,7 @@ try:
                                     pluvio_lst = []
                                     pluvio_counter = 1
 
+                                    # For each group, the regression model is applied
                                     for group in groups:
                                         pluvio_start_date = group.iloc[0, 0]
                                         pluvio_end_date_temp = group.iloc[
@@ -2371,6 +2388,7 @@ try:
                                     pluvio_df = pluvio_df_temp.drop_duplicates(
                                         subset=[pluvio_df_temp.columns[0]]
                                     )
+                            # If manual method is selected, the user can select the date range for which the values should be filled
                             else:
                                 st.write("Select date range")
 
@@ -2399,6 +2417,7 @@ try:
                                     & (ec_data[ec_data.columns[0]] <= to_winter)
                                 ]
 
+                                # If the parameter is precipitation and there are enough values to fill the lysimeter data, a regression model is applied
                                 if (
                                     param_selector_post == "Precipitation"
                                     and not pluvio_df.shape[0]
@@ -2436,10 +2455,12 @@ try:
                                         np.nan
                                     ] * pluvio_df.shape[0]
 
+                            # Plot preview for filling
                             if show_preview:
                                 fig_pluvio = go.Figure(
                                     layout=go.Layout(height=450, title="Fill Preview")
                                 )
+
                                 if close_gaps and winter_type_selector == "albedo":
                                     if param_selector_post == "Precipitation":
                                         fig_pluvio.add_scatter(
@@ -2517,12 +2538,14 @@ try:
                                 )
                                 st.plotly_chart(fig_pluvio, use_container_width=True)
 
+                                # ec_data values without winter period
                                 lm_x = ec_data[
                                     ~ec_data[ec_data.columns[0]].isin(
                                         pluvio_df[pluvio_df.columns[0]].tolist()
                                     )
                                 ]["precipitation"]
 
+                                # data values without winter period
                                 lm_y = data[
                                     ~data[data.columns[0]].isin(
                                         pluvio_df[pluvio_df.columns[0]].tolist()
