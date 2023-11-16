@@ -2110,16 +2110,7 @@ try:
                                     ["Precipitation", "Evapotranspiration"],
                                 )
 
-                            if param_selector_post == "Precipitation":
-                                pluvio_data = ec_data["precipitation"]
-
-                                model = sm.OLS(
-                                    data[col_selector_post].values.reshape(-1, 1),
-                                    sm.add_constant(pluvio_data.values.reshape(-1, 1)),
-                                    missing="drop",
-                                )
-                                lm = model.fit()
-                            else:
+                            if param_selector_post == "Evapotranspiration":
                                 st.info(
                                     "At the moment the evapotranspiration is estimated using the penmon method based on the 'penmon' python package. Due to the lack of data it is only based on the min and max temperature as well as on the day of the year as well as all metrices that can be derived from that."
                                 )
@@ -2128,9 +2119,6 @@ try:
                                 st.info(
                                     "The albedo method is not implemented yet. Please use the manual method."
                                 )
-                                st.stop()
-
-                                # TODO: find albeo data
 
                                 albedo_col, thaw_col_length, thaw_col_type = st.columns(
                                     [0.5, 0.25, 0.25]
@@ -2219,7 +2207,32 @@ try:
                                         )
                                     ]
 
-                                    if param_selector_post == "Precipitation":
+                                    if (
+                                        param_selector_post == "Precipitation"
+                                        and not pluvio_df.shape[0]
+                                        >= (data[col_selector_post].shape[0] - 1)
+                                    ):
+                                        model = sm.OLS(
+                                            data[
+                                                ~data[data.columms[0]].isin(
+                                                    pluvio_df[
+                                                        pluvio_df.columns[0]
+                                                    ].tolist()
+                                                )
+                                            ][col_selector_post].values.reshape(-1, 1),
+                                            sm.add_constant(
+                                                ec_data[
+                                                    ~ec_data[ec_data.columns[0]].isin(
+                                                        pluvio_df[
+                                                            pluvio_df.columns[0]
+                                                        ].tolist()
+                                                    )
+                                                ]["precipitation"].values.reshape(-1, 1)
+                                            ),
+                                            missing="drop",
+                                        )
+                                        lm = model.fit()
+
                                         pluvio_fill_values = (
                                             lm.params[0]
                                             + lm.params[1] * pluvio_df["precipitation"]
@@ -2228,11 +2241,41 @@ try:
                                         pluvio_df[
                                             "precipitation_filled"
                                         ] = pluvio_fill_values
+                                    else:
+                                        pluvio_df["precipitation_filled"] = [
+                                            np.nan
+                                        ] * pluvio_df.shape[0]
 
                                 else:
                                     albedo_fills = ec_data[
                                         ec_data["Albedo"] >= albedo_threshold
                                     ].sort_values(by=[ec_data.columns[0]])
+
+                                    if (
+                                        param_selector_post == "Precipitation"
+                                        and not albedo_fills.shape[0]
+                                        >= (data[col_selector_post].shape[0] - 1)
+                                    ):
+                                        model = sm.OLS(
+                                            data[
+                                                ~data[data.columns[0]].isin(
+                                                    albedo_fills[
+                                                        albedo_fills.columns[0]
+                                                    ].tolist()
+                                                )
+                                            ][col_selector_post].values.reshape(-1, 1),
+                                            sm.add_constant(
+                                                ec_data[
+                                                    ~ec_data[ec_data.columns[0]].isin(
+                                                        albedo_fills[
+                                                            albedo_fills.columns[0]
+                                                        ].tolist()
+                                                    )
+                                                ]["precipitation"].values.reshape(-1, 1)
+                                            ),
+                                            missing="drop",
+                                        )
+                                        lm = model.fit()
 
                                     timestep = (
                                         albedo_fills[albedo_fills.columns[0]]
@@ -2294,7 +2337,11 @@ try:
                                                 <= pluvio_end_date
                                             )
                                         ]
-                                        if param_selector_post == "Precipitation":
+                                        if (
+                                            param_selector_post == "Precipitation"
+                                            and not albedo_fills.shape[0]
+                                            >= (data[col_selector_post].shape[0] - 1)
+                                        ):
                                             pluvio_fill_values = (
                                                 lm.params[0]
                                                 + lm.params[1]
@@ -2309,6 +2356,15 @@ try:
                                             ] = pluvio_counter
                                             pluvio_counter += 1
 
+                                            pluvio_lst.append(pluvio_df)
+                                        elif (
+                                            param_selector_post == "Evapotranspiration"
+                                        ):
+                                            pluvio_lst.append(pluvio_df)
+                                        else:
+                                            pluvio_df["precipitation_filled"] = [
+                                                np.nan
+                                            ] * pluvio_df.shape[0]
                                             pluvio_lst.append(pluvio_df)
 
                                     pluvio_df_temp = pd.concat(pluvio_lst)
@@ -2343,7 +2399,30 @@ try:
                                     & (ec_data[ec_data.columns[0]] <= to_winter)
                                 ]
 
-                                if param_selector_post == "Precipitation":
+                                if (
+                                    param_selector_post == "Precipitation"
+                                    and not pluvio_df.shape[0]
+                                    >= (data[col_selector_post].shape[0] - 1)
+                                ):
+                                    model = sm.OLS(
+                                        data[
+                                            ~data[data.columns[0]].isin(
+                                                pluvio_df[pluvio_df.columns[0]].tolist()
+                                            )
+                                        ][col_selector_post].values.reshape(-1, 1),
+                                        sm.add_constant(
+                                            ec_data[
+                                                ~ec_data[ec_data.columns[0]].isin(
+                                                    pluvio_df[
+                                                        pluvio_df.columns[0]
+                                                    ].tolist()
+                                                )
+                                            ]["precipitation"].values.reshape(-1, 1)
+                                        ),
+                                        missing="drop",
+                                    )
+                                    lm = model.fit()
+
                                     pluvio_fill_values = (
                                         lm.params[0]
                                         + lm.params[1] * pluvio_df["precipitation"]
@@ -2352,6 +2431,10 @@ try:
                                     pluvio_df[
                                         "precipitation_filled"
                                     ] = pluvio_fill_values
+                                else:
+                                    pluvio_df["precipitation_filled"] = [
+                                        np.nan
+                                    ] * pluvio_df.shape[0]
 
                             if show_preview:
                                 fig_pluvio = go.Figure(
@@ -2434,10 +2517,25 @@ try:
                                 )
                                 st.plotly_chart(fig_pluvio, use_container_width=True)
 
-                                if param_selector_post == "Precipitation":
+                                lm_x = ec_data[
+                                    ~ec_data[ec_data.columns[0]].isin(
+                                        pluvio_df[pluvio_df.columns[0]].tolist()
+                                    )
+                                ]["precipitation"]
+
+                                lm_y = data[
+                                    ~data[data.columns[0]].isin(
+                                        pluvio_df[pluvio_df.columns[0]].tolist()
+                                    )
+                                ][col_selector_post]
+
+                                if (
+                                    param_selector_post == "Precipitation"
+                                    and lm_x.shape[0] > 1
+                                ):
                                     fig_lm = px.scatter(
-                                        x=pluvio_data,
-                                        y=data[col_selector_post],
+                                        x=lm_x,
+                                        y=lm_y,
                                         trendline="ols",
                                         color_discrete_sequence=["red"],
                                         title=f"Used Linear Regression Between Pluvio and Lysimeter {lysimeter_selector_post} Data",
@@ -2447,6 +2545,10 @@ try:
                                         },
                                     )
                                     st.plotly_chart(fig_lm, use_container_width=True)
+                                elif param_selector_post == "Precipitation":
+                                    st.error(
+                                        "There is no data for the regression model! This may be due to the fact that at least two days that are not within the winter period are needed for the regression model."
+                                    )
 
                             if st.button("Fill", type="primary", key="albedo_post"):
                                 post_fill_winter(
