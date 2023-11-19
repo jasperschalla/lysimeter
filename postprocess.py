@@ -54,7 +54,7 @@ filename_date = filename_date_end - datetime.timedelta(days=1)
 filename_date_formatted = filename_date.strftime("%Y_%m_%d")
 
 # Get location withouth hexagon number
-location_summary = re.sub("\\d", "", location)
+location_summary = location  # re.sub("\\d", "", location)
 
 # Read the excel for the respective file given by the bash script
 df_sheets = pd.read_excel(

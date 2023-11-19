@@ -140,9 +140,10 @@ with col_location:
 
 if not log_file_error:
     if len(list(file_actions.keys())) == 0:
-        df_status_merged = pd.DataFrame(
-            columns=["date", "process", "FE1", "FE2", "FE3", "RB1", "RB2", "GW"],
+        st.warning(
+            "The 'lysi_data.log' file is empty. Have you deleted its content or the entry that the watcher is running?"
         )
+        st.stop()
     else:
         # Check whether single date or date range is given
         if len(filter_date) < 2:

@@ -660,7 +660,7 @@ with st.sidebar:
 
     # Selector for hexagon and location
     location_selector = st.selectbox("Select lysimeter location", locations, index=0)
-    location_summary = re.sub("\\d", "", location_selector)
+    location_summary = location_selector#re.sub("\\d", "", location_selector)
 
     # Selector for data type
     data_selector = st.selectbox("Select data type", data_type)
@@ -902,7 +902,7 @@ try:
                         rows = [1, 1, 2, 2, 3, 3]
                         cols = [1, 2, 1, 2, 1, 2]
                         fig_all.add_trace(
-                            go.Scatter(
+                            go.Scattergl(
                                 x=dataset[dataset.columns[0]],
                                 y=dataset[
                                     re.sub("_\\d{1}_", f"_{index+1}_", col_selector)
@@ -989,7 +989,7 @@ try:
                         group.iloc[(group.shape[0] - 1), 0],
                     ]:
                         fig.add_trace(
-                            go.Scatter(
+                            go.Scattergl(
                                 x=[
                                     x,
                                     x,
@@ -1024,7 +1024,7 @@ try:
                         group.iloc[(group.shape[0] - 1), 0],
                     ]:
                         fig.add_trace(
-                            go.Scatter(
+                            go.Scattergl(
                                 x=[
                                     x,
                                     x,
@@ -1049,7 +1049,7 @@ try:
                 for index in range(col_selector_filled.shape[0]):
                     if col_selector_filled.loc[index, col_selector_code] == -1:
                         fig.add_trace(
-                            go.Scatter(
+                            go.Scattergl(
                                 x=[
                                     col_selector_filled.iloc[index, 0],
                                     col_selector_filled.iloc[index, 0],
@@ -1071,7 +1071,7 @@ try:
                             show_1 = False
                     elif col_selector_filled.loc[index, col_selector_code] == 1:
                         fig.add_trace(
-                            go.Scatter(
+                            go.Scattergl(
                                 x=[
                                     col_selector_filled.iloc[index, 0],
                                     col_selector_filled.iloc[index, 0],
@@ -1526,7 +1526,7 @@ try:
                         rows = [1, 1, 2, 2, 3, 3]
                         cols = [1, 2, 1, 2, 1, 2]
                         fig_all.add_trace(
-                            go.Scatter(
+                            go.Scattergl(
                                 x=dataset[dataset.columns[0]],
                                 y=dataset[
                                     re.sub(
@@ -1660,7 +1660,7 @@ try:
                         )
 
                         fig_thresh.add_trace(
-                            go.Scatter(
+                            go.Scattergl(
                                 x=data_thresh_plot[data_thresh_plot.columns[0]],
                                 y=data_thresh_plot[col_selector_post],
                                 showlegend=False,
@@ -2030,7 +2030,7 @@ try:
                         fill_df.loc[:, col_selector_post] = fill_values_post
 
                         fig_fill.add_trace(
-                            go.Scatter(
+                            go.Scattergl(
                                 x=data[data.columns[0]],
                                 y=data[col_selector_post],
                                 mode="lines+markers",
@@ -2040,7 +2040,7 @@ try:
                         )
 
                         fig_fill.add_trace(
-                            go.Scatter(
+                            go.Scattergl(
                                 x=fill_df[fill_df.columns[0]],
                                 y=fill_df[col_selector_post],
                                 mode="lines+markers",
@@ -2171,7 +2171,7 @@ try:
                                     )
                                 )
                                 fig_albedo.add_trace(
-                                    go.Scatter(
+                                    go.Scattergl(
                                         x=ec_data[ec_data.columns[0]],
                                         y=ec_data["Albedo"],
                                         mode="markers+lines",
@@ -2528,7 +2528,7 @@ try:
                                         )
 
                                 fig_pluvio.add_trace(
-                                    go.Scatter(
+                                    go.Scattergl(
                                         x=data[data.columns[0]],
                                         y=data[col_selector_post],
                                         name="original",

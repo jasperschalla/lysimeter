@@ -316,7 +316,7 @@ with InfluxDBClient(
             ############################################################################################
 
             g_csv = pd.read_csv(f"./raw/G/{filename}.csv", parse_dates=["Timestamp"])
-            g_csv["Timestamp"] = g_csv[["Timestamp"]].map(lambda x: x.round("min"))
+            g_csv["Timestamp"] = g_csv["Timestamp"].map(lambda x: x.round("min"))
             g_csv = date_min_df.merge(g_csv, on="Timestamp", how="left")
             g_csv.set_index("Timestamp", inplace=True)
             # Still, sometimes there are duplicate timestamps
