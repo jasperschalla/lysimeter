@@ -126,30 +126,28 @@ for lysimeter_index in range(len(df_h_lst)):
         df_previous.iloc[:, 0] = df_previous.iloc[:, 0].astype("datetime64[ns]")
         df_weights = pd.concat([df_previous, df_weights])
         df_weights = df_weights.reset_index(drop=True)
-    else:
-        # When no previous date exists, do some extra checks whether there is a strong decline or not finished inclince
-        # (also hard to detect withouth previous file) in the first 15 time periods
 
-        # Second column after date column is weight of lysimeter
-        lysimeter_weight = df_weights[df_weights.columns[2]]
-        # Check first 15 minutes for high/low changing rates indicating chamber measurement at the beginning of data for this date
-        value_shift = lysimeter_weight[:20].diff()[1:]
-        value_shift_start = value_shift[value_shift > 5]
-        value_shift_end = value_shift[value_shift < -5]
+    # When no previous date exists, do some extra checks whether there is a strong decline or not finished inclince
+    # (also hard to detect withouth previous file) in the first 15 time periods
 
-        # Only reacts when there is a strong decrease in the 15 min window and replace values by value after 15 timesteps period
-        if len(value_shift_end) > 0:
-            if len(value_shift_start) > 0:
-                index_shift_start = value_shift_start.index[0] - 1
-                index_shift_end = value_shift_end.index[-1]
-                lysimeter_weight[index_shift_start:index_shift_end] = lysimeter_weight[
-                    index_shift_end + 1
-                ]
-            else:
-                index_shift_end = value_shift_end.index[-1]
-                lysimeter_weight[:index_shift_end] = lysimeter_weight[
-                    index_shift_end + 1
-                ]
+    # Second column after date column is weight of lysimeter
+    lysimeter_weight = df_weights[df_weights.columns[2]]
+    # Check first 15 minutes for high/low changing rates indicating chamber measurement at the beginning of data for this date
+    value_shift = lysimeter_weight[:20].diff()[1:]
+    value_shift_start = value_shift[value_shift > 5]
+    value_shift_end = value_shift[value_shift < -5]
+
+    # Only reacts when there is a strong decrease in the 15 min window and replace values by value after 15 timesteps period
+    if len(value_shift_end) > 0:
+        if len(value_shift_start) > 0:
+            index_shift_start = value_shift_start.index[0] - 1
+            index_shift_end = value_shift_end.index[-1]
+            lysimeter_weight[index_shift_start:index_shift_end] = lysimeter_weight[
+                index_shift_end + 1
+            ]
+        else:
+            index_shift_end = value_shift_end.index[-1]
+            lysimeter_weight[:index_shift_end] = lysimeter_weight[index_shift_end + 1]
 
     # Filter corrected data by current in case previous date is still prepended
     date_start_index = df_weights.index[
@@ -249,19 +247,31 @@ for lysimeter_index in range(len(df_h_lst)):
                 ][partner_param].to_numpy()
 
                 # Data for current date
-                current_lysimeter = df[param].values.reshape(-1, 1)
+                current_lysimeter_values = df[param].values.reshape(-1, 1)
+                partner_lysimeter_values = partner_lysimeter[
+                    partner_param
+                ].values.reshape(-1, 1)
+
+                ols_df = pd.DataFrame(
+                    {
+                        "partner": partner_lysimeter_values.flatten(),
+                        "current": current_lysimeter_values.flatten(),
+                    }
+                ).dropna()
 
                 # When all data for this or partner lysimeter is NA, output is also NA
-                if all(np.isnan(current_lysimeter)) or all(
-                    np.isnan(partner_lysimeter[partner_param].values.reshape(-1, 1))
+                if (
+                    all(np.isnan(current_lysimeter_values))
+                    or all(np.isnan(partner_lysimeter_values))
+                    or ols_df.shape[0] == 0
                 ):
                     result_values = partner_values
 
                 else:
                     # Create regression model so that partner lysimeter values can predict values from current date data
                     model = sm.OLS(
-                        partner_lysimeter[partner_param].values.reshape(-1, 1),
-                        sm.add_constant(current_lysimeter),
+                        partner_lysimeter_values,
+                        sm.add_constant(current_lysimeter_values),
                         missing="drop",
                     )
                     lm = model.fit()
@@ -382,20 +392,23 @@ for lysimeter_index in range(len(df_h_lst)):
                 )
 
                 # Get current lysimeter values
-                current_lysimeter = df[param].values.reshape(-1, 1)
+                current_lysimeter_values = df[param].values.reshape(-1, 1)
+                partner_lysimeter_values = partner_lysimeter[
+                    partner_param
+                ].values.reshape(-1, 1)
 
                 # If first edge value is missing
                 if np.isnan(df[param].loc[0]):
                     if np.isnan(partner_lysimeter[partner_param].loc[0]) or all(
-                        np.isnan(current_lysimeter)
+                        np.isnan(current_lysimeter_values)
                     ):
                         df.loc[0, f"fill_{param.lower()}_code"] = -1
                         df.loc[0, f"fill_{param.lower()}_msg"] = "edge value"
                     else:
                         # Linear regression model is created
                         model = sm.OLS(
-                            partner_lysimeter[partner_param].values.reshape(-1, 1),
-                            sm.add_constant(current_lysimeter),
+                            partner_lysimeter_values,
+                            sm.add_constant(current_lysimeter_values),
                             missing="drop",
                         )
                         lm = model.fit()
@@ -420,7 +433,7 @@ for lysimeter_index in range(len(df_h_lst)):
                         partner_lysimeter[partner_param].loc[
                             partner_lysimeter.shape[0] - 1
                         ]
-                    ) or all(np.isnan(current_lysimeter)):
+                    ) or all(np.isnan(current_lysimeter_values)):
                         df.loc[(df.shape[0] - 1), f"fill_{param.lower()}_code"] = -1
                         df.loc[
                             (df.shape[0] - 1), f"fill_{param.lower()}_msg"
@@ -428,8 +441,8 @@ for lysimeter_index in range(len(df_h_lst)):
                     else:
                         # Linear regression model is created
                         model = sm.OLS(
-                            partner_lysimeter[partner_param].values.reshape(-1, 1),
-                            sm.add_constant(current_lysimeter),
+                            partner_lysimeter_values,
+                            sm.add_constant(current_lysimeter_values),
                             missing="drop",
                         )
                         lm = model.fit()

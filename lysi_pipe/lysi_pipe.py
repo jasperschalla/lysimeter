@@ -22,6 +22,7 @@ from matplotlib.colors import (
 )
 
 # plt.style.use("dark_background")
+# config = {'staticPlot': True}
 
 bg_color = "#0f1116"
 plt.rcParams.update(
@@ -86,10 +87,15 @@ try:
                 filenames_current = filenames_current_temp.strftime("%Y-%m-%d")
 
                 # Get location of file
-                location = re.search(".*location=(.*).*", line_relevant).group(1)
+                location = re.search(".*location=(\\w{2}\\d*).*", line_relevant).group(
+                    1
+                )
 
                 # Append to dict entry for this date
-                file_actions[location][filenames_current].append(line_relevant)
+                try:
+                    file_actions[location][filenames_current].append(line_relevant)
+                except KeyError:
+                    print("Extra dates in log file!")
 
             # If the line is a separator but not the last line
             elif re.match(".*--{5,}", line) and not len(lines) == (line_index + 1):
@@ -103,7 +109,7 @@ try:
 
                     # Get location of file
                     location = re.search(
-                        ".*location=(.*).*", lines[line_index + 1]
+                        ".*location=(\\w{2}\\d*).*", lines[line_index + 1]
                     ).group(1)
 
                     # If date is not a key in the dict yet create it
@@ -230,7 +236,7 @@ if not log_file_error:
                 df_status.append(row)
 
             # Concatenate all dataframes together to create dataframe to display
-            df_status_merged = pd.concat(df_status)
+            df_status_merged = pd.concat(df_status).sort_values(by=["date"])
             df_status_merged.reset_index(drop=True, inplace=True)
             df_status_merged.iloc[:, 0] = pd.to_datetime(
                 df_status_merged.iloc[:, 0], format="%Y-%m-%d", errors="coerce"

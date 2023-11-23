@@ -26,6 +26,10 @@ from influxdb_client import InfluxDBClient
 from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb import InfluxDBClient as InfluxDBClientOld
 from penmon import Station
+import warnings
+
+# Ignore warnings for concatenate empty pandas dataframes
+warnings.simplefilter(action="ignore", category=FutureWarning)
 
 # Open LysiCheck image
 image = Image.open("./lysi_check_text.png")
@@ -659,11 +663,13 @@ with st.sidebar:
     )
 
     # Selector for hexagon and location
-    location_selector = st.selectbox("Select lysimeter location", locations, index=0)
-    location_summary = location_selector#re.sub("\\d", "", location_selector)
+    location_selector = st.selectbox(
+        "Select lysimeter location", locations, index=0, on_change=reset_data
+    )
+    location_summary = location_selector  # re.sub("\\d", "", location_selector)
 
     # Selector for data type
-    data_selector = st.selectbox("Select data type", data_type)
+    data_selector = st.selectbox("Select data type", data_type, on_change=reset_data)
 
     folder_date_lower = datetime.date(2010, 1, 1)
     folder_date_upper = datetime.date.today()
@@ -876,49 +882,6 @@ try:
                         key=lysimeter_selector,
                     )
 
-                # Expandable section that shows the plot of the selected parameter for all lysimeters
-                with st.expander("All lysimeter plots"):
-                    st.info(
-                        "The partner lysimeter is shown according to the 'lysimeter_matches.json' file. If you want to change the partner lysimeter, change it there. But be aware that the automatic gap filling was also based on the default lysimeter matches!"
-                    )
-                    subtitles = []
-                    for i in range(6):
-                        if (i + 1) == lysimeter_selector:
-                            subtitles.append(f"Lysimeter {i+1} (selected)")
-                        elif (i + 1) == lysimeter_matches[location_summary][
-                            str(lysimeter_selector)
-                        ]:
-                            subtitles.append(f"Lysimeter {i+1} (partner)")
-                        else:
-                            subtitles.append(f"Lysimeter {i+1}")
-
-                    fig_all = make_subplots(
-                        rows=3,
-                        cols=2,
-                        subplot_titles=subtitles,
-                    )
-
-                    for index, dataset in enumerate(datasets):
-                        rows = [1, 1, 2, 2, 3, 3]
-                        cols = [1, 2, 1, 2, 1, 2]
-                        fig_all.add_trace(
-                            go.Scattergl(
-                                x=dataset[dataset.columns[0]],
-                                y=dataset[
-                                    re.sub("_\\d{1}_", f"_{index+1}_", col_selector)
-                                ],
-                                mode="lines+markers",
-                                showlegend=False,
-                                marker=dict(size=2, color="#4574ba"),
-                            ),
-                            row=rows[index],
-                            col=cols[index],
-                        )
-                    fig_all.update_layout(
-                        height=800, width=800, title_text=f"{col_selector}"
-                    )
-                    st.plotly_chart(fig_all, use_container_width=True)
-
                 # Clean flagged data so that each sequential group of missing data can be displayed as rectangle and single missing gaps as lines
                 # as well as single filled values
 
@@ -942,6 +905,113 @@ try:
                 multi_gaps_grouped_na = multi_gaps.groupby(
                     [col_selector_na_groups, "date"]
                 )
+
+                # Downsample data except for days where gaps are
+                data_temp = data.resample("H", on=data.columns[0]).mean().reset_index()
+                exclude_days = (
+                    data[data[col_selector_code].isin([1, 2, -1, -2])]["Timestamp"]
+                    .dt.strftime("%Y-%m-%d")
+                    .unique()
+                    .tolist()
+                )
+
+                data_temp_original = data[
+                    data[data.columns[0]].dt.strftime("%Y-%m-%d").isin(exclude_days)
+                ]
+                data_temp = data_temp[
+                    ~data_temp[data_temp.columns[0]]
+                    .dt.strftime("%Y-%m-%d")
+                    .isin(exclude_days)
+                ]
+                data_downsampled = pd.concat(
+                    [data_temp, data_temp_original]
+                ).sort_values(by=[data.columns[0]])
+
+                data = data_downsampled
+
+                render_expandables = st.checkbox(
+                    "Render expandable section for all lysimeter plots"
+                )
+                st.info(
+                    "Enabling rendering will result in loading of this section every time user input is updated. This can consume a lot of extra time."
+                )
+
+                if render_expandables:
+                    # Expandable section that shows the plot of the selected parameter for all lysimeters
+                    with st.expander("All lysimeter plots"):
+                        st.info(
+                            "The partner lysimeter is shown according to the 'lysimeter_matches.json' file. If you want to change the partner lysimeter, change it there. But be aware that the automatic gap filling was also based on the default lysimeter matches!"
+                        )
+                        subtitles = []
+                        for i in range(6):
+                            if (i + 1) == lysimeter_selector:
+                                subtitles.append(f"Lysimeter {i+1} (selected)")
+                            elif (i + 1) == lysimeter_matches[location_summary][
+                                str(lysimeter_selector)
+                            ]:
+                                subtitles.append(f"Lysimeter {i+1} (partner)")
+                            else:
+                                subtitles.append(f"Lysimeter {i+1}")
+
+                        fig_all = make_subplots(
+                            rows=3,
+                            cols=2,
+                            subplot_titles=subtitles,
+                        )
+
+                        for index, dataset in enumerate(datasets):
+                            index_selector = re.sub(
+                                "_\\d{1}_", f"_{index+1}_", col_selector
+                            )
+
+                            index_selector_code = re.sub(
+                                "_\\d{1}_", f"_{index+1}_", col_selector_code
+                            )
+
+                            exclude_days_temp = (
+                                dataset[
+                                    dataset[index_selector_code].isin([1, 2, -1, -2])
+                                ]["Timestamp"]
+                                .dt.strftime("%Y-%m-%d")
+                                .unique()
+                                .tolist()
+                            )
+                            data_temp = (
+                                dataset.resample("H", on=data.columns[0])
+                                .mean()
+                                .reset_index()
+                            )
+                            data_temp_original = dataset[
+                                dataset[dataset.columns[0]]
+                                .dt.strftime("%Y-%m-%d")
+                                .isin(exclude_days_temp)
+                            ]
+                            data_temp = data_temp[
+                                ~data_temp[data_temp.columns[0]]
+                                .dt.strftime("%Y-%m-%d")
+                                .isin(exclude_days_temp)
+                            ]
+                            data_downsampled = pd.concat(
+                                [data_temp, data_temp_original]
+                            ).sort_values(by=[data.columns[0]])
+
+                            rows = [1, 1, 2, 2, 3, 3]
+                            cols = [1, 2, 1, 2, 1, 2]
+                            fig_all.add_trace(
+                                go.Scattergl(
+                                    x=data_downsampled[data_downsampled.columns[0]],
+                                    y=data_downsampled[index_selector],
+                                    mode="lines+markers",
+                                    showlegend=False,
+                                    marker=dict(size=2, color="#4574ba"),
+                                ),
+                                row=rows[index],
+                                col=cols[index],
+                            )
+                        fig_all.update_layout(
+                            height=800, width=800, title_text=f"{col_selector}"
+                        )
+                        st.plotly_chart(fig_all, use_container_width=True)
 
                 # Adapt ylims since the lines showing missing single gaps or filled gaps have ylim of -Inf to Inf
                 if np.isnan(data[col_selector].min()):
@@ -972,6 +1042,7 @@ try:
                     color_discrete_sequence=["#4574ba"],
                     title=f"{col_selector} of Lysimeter {lysimeter_selector}",
                     markers=True,
+                    render_mode="webgl",
                 )
                 fig.update_traces(marker={"size": 2})
 
@@ -995,8 +1066,8 @@ try:
                                     x,
                                 ],
                                 y=[
-                                    -10e10,
-                                    10e10,
+                                    -5000,
+                                    5000,
                                 ],
                                 mode="lines",
                                 line=dict(color="#3abd68"),
@@ -1030,8 +1101,8 @@ try:
                                     x,
                                 ],
                                 y=[
-                                    -10e10,
-                                    10e10,
+                                    -5000,
+                                    5000,
                                 ],
                                 mode="lines",
                                 legendgroup="-2",
@@ -1055,8 +1126,8 @@ try:
                                     col_selector_filled.iloc[index, 0],
                                 ],
                                 y=[
-                                    -10e10,
-                                    10e10,
+                                    -5000,
+                                    5000,
                                 ],
                                 mode="lines",
                                 legendgroup="-1",
@@ -1077,8 +1148,8 @@ try:
                                     col_selector_filled.iloc[index, 0],
                                 ],
                                 y=[
-                                    -10e10,
-                                    10e10,
+                                    -5000,
+                                    5000,
                                 ],
                                 mode="lines",
                                 line=dict(color="#538edb"),
@@ -1122,10 +1193,15 @@ try:
                         ][data.columns[0]]
 
                     else:
-                        fill_date_selector_options = [
-                            f"{group.iloc[0,0]} to {group.iloc[(group.shape[0]-1),0]}"
-                            for name, group in multi_gaps_grouped_na
-                        ]
+                        fill_date_selector_options = sorted(
+                            [
+                                f"{group.iloc[0,0]} to {group.iloc[(group.shape[0]-1),0]}"
+                                for name, group in multi_gaps_grouped_na
+                            ],
+                            key=lambda x: datetime.datetime.strptime(
+                                x.split("to")[0].strip(), "%Y-%m-%d %H:%M:%S"
+                            ),
+                        )
 
                     # Selector for gap date
                     fill_date_selector = st.selectbox(
@@ -1269,10 +1345,15 @@ try:
                     )
 
                     # Available date ranges for multi filled gaps
-                    multi_gaps_filled_labels = [
-                        f"{group.iloc[0,0]} to {group.iloc[(group.shape[0]-1),0]}"
-                        for name, group in multi_gaps_grouped_filled
-                    ]
+                    multi_gaps_filled_labels = sorted(
+                        [
+                            f"{group.iloc[0,0]} to {group.iloc[(group.shape[0]-1),0]}"
+                            for name, group in multi_gaps_grouped_filled
+                        ],
+                        key=lambda x: datetime.datetime.strptime(
+                            x.split("to")[0].strip(), "%Y-%m-%d %H:%M:%S"
+                        ),
+                    )
 
                     # Available dates for single filled gaps
                     single_gaps_labels = col_selector_filled[
@@ -2063,6 +2144,7 @@ try:
                                     "x": f"Lysimeter {lysimeter_matches[location_summary][str(lysimeter_selector_post)]} {col_selector_post}",
                                     "y": f"Lysimeter {lysimeter_selector_post} {col_selector_post}",
                                 },
+                                render_mode="webgl",
                             )
                             st.plotly_chart(fig_fill_lm, use_container_width=True)
 
@@ -2566,6 +2648,7 @@ try:
                                             "x": "Pluvio Precipitation",
                                             "y": f"Lysimeter {lysimeter_selector_post} Precipitation",
                                         },
+                                        render_mode="webgl",
                                     )
                                     st.plotly_chart(fig_lm, use_container_width=True)
                                 elif param_selector_post == "Precipitation":

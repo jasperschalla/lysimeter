@@ -11,9 +11,10 @@ COPY convert.sh ./
 COPY dump_dbd.cpp ./
 COPY preprocess.py ./
 COPY postprocess.py ./
-COPY resolve_errors.py ./
-COPY resolve_errors.sh ./
+COPY resolve_pipe_errors.py ./
+COPY resolve_pipe_errors.sh ./
 COPY resolve_post_errors.py ./
+COPY resolve_date_errors.py ./
 
 RUN mkdir ./original ./dumped ./dumped_head ./raw
 

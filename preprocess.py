@@ -46,6 +46,9 @@ logger.addHandler(fileHandler)
 filepath = sys.argv[1]
 # Filename without file extension and path
 filename = filepath.split("/")[-1].split(".")[0]
+filename_date = filename.split("T")[0].split("_")[-1]
+filename_date_comp = re.search("(\\d{4})(\\d{2})(\\d{2})", filename_date)
+date = f"{filename_date_comp.group(1)}-{filename_date_comp.group(2)}-{filename_date_comp.group(3)}"
 
 location = sys.argv[2]
 
@@ -164,23 +167,23 @@ with InfluxDBClient(
             i_csv["Timestamp"] = i_csv["Timestamp"].map(lambda x: x.round("min"))
 
             # Create full date range for 1 and 10min so that missing dates are in the dataset but filled with NA
-            start_date_min = datetime.datetime.strptime(
+            start_date_min_i = datetime.datetime.strptime(
                 f"{i_csv.loc[0,'Timestamp'].strftime('%Y-%m-%d')} 00:00:00",
                 "%Y-%m-%d %H:%M:%S",
             )
 
-            end_date_min = datetime.datetime.strptime(
-                f"{i_csv.loc[0,'Timestamp'].strftime('%Y-%m-%d')} 23:59:00",
+            end_date_min_i = datetime.datetime.strptime(
+                f"{i_csv.loc[i_csv.shape[0]-1,'Timestamp'].strftime('%Y-%m-%d')} 23:59:00",
                 "%Y-%m-%d %H:%M:%S",
             )
 
-            date_range_min = pd.date_range(start_date_min, end_date_min, freq="min")
-            date_min_df = pd.DataFrame({"Timestamp": date_range_min})
+            date_range_min_i = pd.date_range(
+                start_date_min_i, end_date_min_i, freq="min"
+            )
+            date_min_df_i = pd.DataFrame({"Timestamp": date_range_min_i})
 
-            date_range_10min = pd.date_range(start_date_min, end_date_min, freq="10min")
-            date_10min_df = pd.DataFrame({"Timestamp": date_range_10min})
+            i_csv = date_min_df_i.merge(i_csv, on="Timestamp", how="left")
 
-            i_csv = date_min_df.merge(i_csv, on="Timestamp", how="left")
             i_csv.set_index("Timestamp", inplace=True)
             # Still, sometimes there are duplicate timestamps
             i_csv = i_csv[~i_csv.index.duplicated(keep="first")]
@@ -208,10 +211,16 @@ with InfluxDBClient(
 
                 if i_csv[col].dtype == "object":
                     ip_df = i_csv[
-                        i_csv[col].str.contains(
-                            "Overrange|overrange|Underrange|underrange", na=False
-                        )
+                        (i_csv[col] == "Overrange")
+                        | (i_csv[col] == "overrange")
+                        | (i_csv[col] == "Underrange")
+                        | (i_csv[col] == "underrange")
                     ].copy()
+                    # ip_df = i_csv[
+                    #     i_csv[col].str.contains(
+                    #         "Overrange|overrange|Underrange|underrange", na=False
+                    #     )
+                    # ].copy()
                     ip_df["parameter"] = col
                     ip_df["reason"] = "ip"
                 else:
@@ -249,7 +258,22 @@ with InfluxDBClient(
             h_csv = pd.read_csv(f"./raw/H/{filename}.csv", parse_dates=["Timestamp"])
             h_csv["Timestamp"] = h_csv["Timestamp"].map(lambda x: x.round("min"))
 
-            h_csv = date_10min_df.merge(h_csv, on="Timestamp", how="left")
+            start_date_min_h = datetime.datetime.strptime(
+                f"{h_csv.loc[0,'Timestamp'].strftime('%Y-%m-%d')} 00:00:00",
+                "%Y-%m-%d %H:%M:%S",
+            )
+
+            end_date_min_h = datetime.datetime.strptime(
+                f"{h_csv.loc[h_csv.shape[0]-1,'Timestamp'].strftime('%Y-%m-%d')} 23:59:00",
+                "%Y-%m-%d %H:%M:%S",
+            )
+
+            date_range_10min_h = pd.date_range(
+                start_date_min_h, end_date_min_h, freq="10min"
+            )
+            date_10min_df_h = pd.DataFrame({"Timestamp": date_range_10min_h})
+
+            h_csv = date_10min_df_h.merge(h_csv, on="Timestamp", how="left")
             h_csv.set_index("Timestamp", inplace=True)
             # Still, sometimes there are duplicate timestamps
             h_csv = h_csv[~h_csv.index.duplicated(keep="first")]
@@ -277,10 +301,16 @@ with InfluxDBClient(
 
                 if h_csv[col].dtype == "object":
                     ip_df = h_csv[
-                        h_csv[col].str.contains(
-                            "Overrange|overrange|Underrange|underrange", na=False
-                        )
+                        (h_csv[col] == "Overrange")
+                        | (h_csv[col] == "overrange")
+                        | (h_csv[col] == "Underrange")
+                        | (h_csv[col] == "underrange")
                     ].copy()
+                    # ip_df = h_csv[
+                    #     h_csv[col].str.contains(
+                    #         "Overrange|overrange|Underrange|underrange", na=False
+                    #     )
+                    # ].copy()
                     ip_df["parameter"] = col
                     ip_df["reason"] = "ip"
                 else:
@@ -316,8 +346,25 @@ with InfluxDBClient(
             ############################################################################################
 
             g_csv = pd.read_csv(f"./raw/G/{filename}.csv", parse_dates=["Timestamp"])
+
+            start_date_min_g = datetime.datetime.strptime(
+                f"{g_csv.loc[0,'Timestamp'].strftime('%Y-%m-%d')} 00:00:00",
+                "%Y-%m-%d %H:%M:%S",
+            )
+
+            end_date_min_g = datetime.datetime.strptime(
+                f"{g_csv.loc[g_csv.shape[0]-1,'Timestamp'].strftime('%Y-%m-%d')} 23:59:00",
+                "%Y-%m-%d %H:%M:%S",
+            )
+
+            date_range_min_g = pd.date_range(
+                start_date_min_g, end_date_min_g, freq="min"
+            )
+            date_min_df_g = pd.DataFrame({"Timestamp": date_range_min_g})
+
             g_csv["Timestamp"] = g_csv["Timestamp"].map(lambda x: x.round("min"))
-            g_csv = date_min_df.merge(g_csv, on="Timestamp", how="left")
+            g_csv = date_min_df_g.merge(g_csv, on="Timestamp", how="left")
+
             g_csv.set_index("Timestamp", inplace=True)
             # Still, sometimes there are duplicate timestamps
             g_csv = g_csv[~g_csv.index.duplicated(keep="first")]
@@ -345,73 +392,417 @@ with InfluxDBClient(
             pivoted_flags["schedule"] = "H"
             pivoted_flags.loc[:, "location"] = location
 
-            # Check if folder exists and when not create it and write schedules and flag dataframe to excel files
+            available_dates_g = (
+                g_csv.reset_index()["Timestamp"]
+                .dt.strftime("%Y-%m-%d")
+                .unique()
+                .tolist()
+            )
+            available_dates_h = (
+                h_csv.reset_index()["Timestamp"]
+                .dt.strftime("%Y-%m-%d")
+                .unique()
+                .tolist()
+            )
+            available_dates_i = (
+                i_csv.reset_index()["Timestamp"]
+                .dt.strftime("%Y-%m-%d")
+                .unique()
+                .tolist()
+            )
+
+            # Write all schedules to influxdb when there is more than one day of data available (Error in the data logger)
             pathlib.Path(f"./excel/{location}").mkdir(parents=True, exist_ok=True)
-            with pd.ExcelWriter(f"./excel/{location}/{filename}.xlsx") as writer:
-                g_csv.drop(["location"], axis=1).to_excel(writer, sheet_name="G")
-                i_csv.drop(["location"], axis=1).to_excel(writer, sheet_name="I")
-                h_csv.drop(["location"], axis=1).to_excel(writer, sheet_name="H")
-                pivoted_flags.to_excel(writer, sheet_name="Flags")
-            logger.info(f"file '{filename}.xlsx' was created for location={location}")
+            if (
+                len(available_dates_g) > 1
+                or len(available_dates_h) > 1
+                or len(available_dates_i) > 1
+            ):
+                name_date = datetime.datetime.strptime(
+                    date, "%Y-%m-%d"
+                ) - datetime.timedelta(days=1)
 
-            # Write schedules and flag dataframe to influxdb
-            write_api.write(
-                os.environ.get("BUCKET_RAW"),
-                os.environ.get("ORG"),
-                # Since influxdb adds +2 hours internal (is always UTC)
-                record=i_csv.tz_localize(
-                    "UTC"
-                ),  # tz_localize("Europe/Berlin").tz_convert("UTC")
-                data_frame_measurement_name="I",
-                data_frame_tag_columns=["location"],
-            )
-            logger.info(
-                f"file '{filename}.csv's I schedule has been successfully written to influxdb for location={location}"
-            )
+                # Create start and end date for this date (as name intended) from 00:00:00 to 23:59:00 in min
+                start_date_min = datetime.datetime.strptime(
+                    f"{name_date.strftime('%Y-%m-%d')} 00:00:00", "%Y-%m-%d %H:%M:%S"
+                )
+                end_date_min = datetime.datetime.strptime(
+                    f"{name_date.strftime('%Y-%m-%d')} 23:59:00", "%Y-%m-%d %H:%M:%S"
+                )
 
-            write_api.write(
-                os.environ.get("BUCKET_RAW"),
-                os.environ.get("ORG"),
-                # Since influxdb adds +2 hours internal (is always UTC)
-                record=h_csv.tz_localize(
-                    "UTC"
-                ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),
-                data_frame_measurement_name="H",
-                data_frame_tag_columns=["location"],
-            )
-            logger.info(
-                f"file '{filename}.csv's H schedule has been successfully written to influxdb for location={location}"
-            )
+                # Create pandas data frame with date range in min for merging with schedules
+                date_range_min = pd.date_range(start_date_min, end_date_min, freq="min")
+                date_min_df = pd.DataFrame({"Timestamp": date_range_min})
 
-            write_api.write(
-                os.environ.get("BUCKET_RAW"),
-                os.environ.get("ORG"),
-                # Since influxdb adds +2 hours internal (is always UTC)
-                record=g_csv.tz_localize(
-                    "UTC"
-                ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),
-                data_frame_measurement_name="G",
-                data_frame_tag_columns=["location"],
-            )
+                # Create start end end date for this date (as name intended) from 00:00:00 to 23:50:00 in 10min
+                start_date_10min = datetime.datetime.strptime(
+                    f"{name_date.strftime('%Y-%m-%d')} 00:00:00", "%Y-%m-%d %H:%M:%S"
+                )
+                end_date_10min = datetime.datetime.strptime(
+                    f"{name_date.strftime('%Y-%m-%d')} 23:50:00", "%Y-%m-%d %H:%M:%S"
+                )
 
-            logger.info(
-                f"file '{filename}.csv's G schedule has been successfully written to influxdb for location={location}"
-            )
+                # Create pandas data frame with date range in 10min for merging with schedules
+                date_range_10min = pd.date_range(
+                    start_date_10min, end_date_10min, freq="10min"
+                )
+                date_10min_df = pd.DataFrame({"Timestamp": date_range_10min})
 
-            write_api.write(
-                os.environ.get("BUCKET_RAW"),
-                org=os.environ.get("ORG"),
-                # Since influxdb adds +2 hours internal (is always UTC)
-                record=pivoted_flags.tz_localize(
-                    "UTC"
-                ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
-                data_frame_measurement_name="Flags",
-                data_frame_tag_columns=["location", "schedule"],
-            )
+                # Filter all three schedules for this date
+                g_csv_date = date_min_df.merge(
+                    g_csv[
+                        (g_csv.index >= start_date_min) & (g_csv.index <= end_date_min)
+                    ],
+                    on="Timestamp",
+                    how="left",
+                ).set_index("Timestamp")
+                h_csv_date = date_10min_df.merge(
+                    h_csv[
+                        (h_csv.index >= start_date_10min)
+                        & (h_csv.index <= end_date_10min)
+                    ],
+                    on="Timestamp",
+                    how="left",
+                ).set_index("Timestamp")
+                i_csv_date = date_min_df.merge(
+                    i_csv[
+                        (i_csv.index >= start_date_min) & (i_csv.index <= end_date_min)
+                    ],
+                    on="Timestamp",
+                    how="left",
+                ).set_index("Timestamp")
 
-            logger.info(
-                f"file '{filename}.csv's Flags schedule has been successfully written to influxdb for location={location}"
-            )
+                pivoted_flags_date = pivoted_flags[
+                    (pivoted_flags.index >= start_date_min)
+                    & (pivoted_flags.index <= end_date_min)
+                ]
+
+                # If all schedules are empty, rais ValueError (exact error does not matter)
+                if i_csv.shape[0] == 0 or h_csv.shape[0] == 0 or g_csv.shape[0] == 0:
+                    logger.warning("Multiple dates in file but not date from filename.")
+                    raise ValueError
+                else:
+                    with pd.ExcelWriter(
+                        f"./excel/{location}/{filename}.xlsx"
+                    ) as writer:
+                        g_csv_date.drop(["location"], axis=1).to_excel(
+                            writer, sheet_name="G"
+                        )
+                        i_csv_date.drop(["location"], axis=1).to_excel(
+                            writer, sheet_name="I"
+                        )
+                        h_csv_date.drop(["location"], axis=1).to_excel(
+                            writer, sheet_name="H"
+                        )
+                        pivoted_flags_date.to_excel(writer, sheet_name="Flags")
+                        logger.info(
+                            f"file '{filename}.xlsx' was created for location={location}"
+                        )
+
+                    write_api.write(
+                        os.environ.get("BUCKET_RAW"),
+                        os.environ.get("ORG"),
+                        # Since influxdb adds +2 hours internal (is always UTC)
+                        record=i_csv_date.tz_localize(
+                            "UTC"
+                        ),  # .tz_convert("Europe/Berlin"),
+                        data_frame_measurement_name="I",
+                        data_frame_tag_columns=["location"],
+                    )
+                    logger.info(
+                        f"file '{filename}.csv's I schedule has been successfully written to influxdb for location={location}"
+                    )
+
+                    write_api.write(
+                        os.environ.get("BUCKET_RAW"),
+                        os.environ.get("ORG"),
+                        # Since influxdb adds +2 hours internal (is always UTC)
+                        record=h_csv_date.tz_localize(
+                            "UTC"
+                        ),  # .tz_convert("Europe/Berlin"),
+                        data_frame_measurement_name="H",
+                        data_frame_tag_columns=["location"],
+                    )
+                    logger.info(
+                        f"file '{filename}.csv's H schedule has been successfully written to influxdb for location={location}"
+                    )
+
+                    write_api.write(
+                        os.environ.get("BUCKET_RAW"),
+                        os.environ.get("ORG"),
+                        # Since influxdb adds +2 hours internal (is always UTC)
+                        record=g_csv_date.tz_localize(
+                            "UTC"
+                        ),  # .tz_convert("Europe/Berlin"),
+                        data_frame_measurement_name="G",
+                        data_frame_tag_columns=["location"],
+                    )
+                    logger.info(
+                        f"file '{filename}.csv's G schedule has been successfully written to influxdb for location={location}"
+                    )
+
+                    write_api.write(
+                        os.environ.get("BUCKET_RAW"),
+                        org=os.environ.get("ORG"),
+                        # Since influxdb adds +2 hours internal (is always UTC)
+                        record=pivoted_flags_date.tz_localize(
+                            "UTC"
+                        ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
+                        data_frame_measurement_name="Flags",
+                        data_frame_tag_columns=["location", "schedule"],
+                    )
+                    logger.info(
+                        f"file '{filename}.csv's Flags schedule has been successfully written to influxdb for location={location}"
+                    )
+
+                # Remove name_date from available dates
+                available_dates_g.remove(name_date.strftime("%Y-%m-%d"))
+                available_dates_h.remove(name_date.strftime("%Y-%m-%d"))
+                available_dates_i.remove(name_date.strftime("%Y-%m-%d"))
+
+                excel_dates = [
+                    (
+                        datetime.datetime.strptime(
+                            re.search(".*_(.*)T.*", file).group(1), "%Y%m%d"
+                        )
+                        - datetime.timedelta(days=1)
+                    ).strftime("%Y-%m-%d")
+                    # re.search(".*_(.*)T.*", file).group(1)
+                    for file in os.listdir(f"./excel/{location}")
+                    if not file == ".DS_Store"
+                ]
+
+                # Get dates that are in all three schedules available
+                available_dates_all = list(
+                    set(available_dates_g)
+                    & set(available_dates_h)
+                    & set(available_dates_i)
+                )
+
+                # Loop over all dates that are in all three schedules available
+                for date in available_dates_all:
+                    # Loop over all already filled dates too see if available date is missing so far
+                    if date not in excel_dates:
+                        # Create start and end date for this date from 00:00:00 to 23:59:00 in min
+                        start_date_min = datetime.datetime.strptime(
+                            f"{date} 00:00:00", "%Y-%m-%d %H:%M:%S"
+                        )
+                        end_date_min = datetime.datetime.strptime(
+                            f"{date} 23:59:00", "%Y-%m-%d %H:%M:%S"
+                        )
+
+                        # Create pandas data frame with date range in min for merging with schedules
+                        date_range_min = pd.date_range(
+                            start_date_min, end_date_min, freq="min"
+                        )
+                        date_min_df = pd.DataFrame({"Timestamp": date_range_min})
+
+                        # Create start end end date for this date from 00:00:00 to 23:50:00 in 10min
+                        start_date_10min = datetime.datetime.strptime(
+                            f"{date} 00:00:00", "%Y-%m-%d %H:%M:%S"
+                        )
+                        end_date_10min = datetime.datetime.strptime(
+                            f"{date} 23:50:00", "%Y-%m-%d %H:%M:%S"
+                        )
+
+                        # Create pandas data frame with date range in 10min for merging with schedules
+                        date_range_10min = pd.date_range(
+                            start_date_10min, end_date_10min, freq="10min"
+                        )
+                        date_10min_df = pd.DataFrame({"Timestamp": date_range_10min})
+
+                        # Filter all three schedules for this date
+                        g_csv_date = date_min_df.merge(
+                            g_csv[
+                                (g_csv.index >= start_date_min)
+                                & (g_csv.index <= end_date_min)
+                            ],
+                            on="Timestamp",
+                            how="left",
+                        ).set_index("Timestamp")
+                        h_csv_date = date_10min_df.merge(
+                            h_csv[
+                                (h_csv.index >= start_date_10min)
+                                & (h_csv.index <= end_date_10min)
+                            ],
+                            on="Timestamp",
+                            how="left",
+                        ).set_index("Timestamp")
+                        i_csv_date = date_min_df.merge(
+                            i_csv[
+                                (i_csv.index >= start_date_min)
+                                & (i_csv.index <= end_date_min)
+                            ],
+                            on="Timestamp",
+                            how="left",
+                        ).set_index("Timestamp")
+                        pivoted_flags_date = pivoted_flags[
+                            (pivoted_flags.index >= start_date_min)
+                            & (pivoted_flags.index <= end_date_min)
+                        ]
+                        # Check if not all columns are NA from g_csv_date, h_csv_date, i_csv_date and pivoted_flags_date
+                        if (
+                            not g_csv_date.drop(["location"], axis=1)
+                            .dropna(how="all")
+                            .shape[0]
+                            == 0
+                            or not h_csv_date.drop(["location"], axis=1)
+                            .dropna(how="all")
+                            .shape[0]
+                            == 0
+                            or not i_csv_date.drop(["location"], axis=1)
+                            .dropna(how="all")
+                            .shape[0]
+                            == 0
+                            or not pivoted_flags_date.dropna(how="all").shape[0] == 0
+                        ):
+                            error_date_name = (
+                                start_date_min + datetime.timedelta(days=1)
+                            ).strftime("%Y%m%d")
+
+                            with pd.ExcelWriter(
+                                f"./excel/{location}/error_{error_date_name}T000.xlsx"
+                            ) as writer:
+                                g_csv_date.drop(["location"], axis=1).to_excel(
+                                    writer, sheet_name="G"
+                                )
+                                i_csv_date.drop(["location"], axis=1).to_excel(
+                                    writer, sheet_name="I"
+                                )
+                                h_csv_date.drop(["location"], axis=1).to_excel(
+                                    writer, sheet_name="H"
+                                )
+                                pivoted_flags_date.to_excel(writer, sheet_name="Flags")
+
+                            logger.warning(
+                                f"Multiple dates in one file. file 'error_{error_date_name}T000.xlsx' has been created for location={location}. Extra postprocessing of file needed by running the script 'resolve_date_errors.py'"
+                            )
+
+                            write_api.write(
+                                os.environ.get("BUCKET_RAW"),
+                                os.environ.get("ORG"),
+                                # Since influxdb adds +2 hours internal (is always UTC)
+                                record=i_csv_date.tz_localize(
+                                    "UTC"
+                                ),  # .tz_convert("Europe/Berlin"),
+                                data_frame_measurement_name="I",
+                                data_frame_tag_columns=["location"],
+                            )
+                            logger.info(
+                                f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's I schedule has been successfully written to influxdb for location={location}"
+                            )
+
+                            write_api.write(
+                                os.environ.get("BUCKET_RAW"),
+                                os.environ.get("ORG"),
+                                # Since influxdb adds +2 hours internal (is always UTC)
+                                record=h_csv_date.tz_localize(
+                                    "UTC"
+                                ),  # .tz_convert("Europe/Berlin"),
+                                data_frame_measurement_name="H",
+                                data_frame_tag_columns=["location"],
+                            )
+                            logger.info(
+                                f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's H schedule has been successfully written to influxdb for location={location}"
+                            )
+
+                            write_api.write(
+                                os.environ.get("BUCKET_RAW"),
+                                os.environ.get("ORG"),
+                                # Since influxdb adds +2 hours internal (is always UTC)
+                                record=g_csv_date.tz_localize(
+                                    "UTC"
+                                ),  # .tz_convert("Europe/Berlin"),
+                                data_frame_measurement_name="G",
+                                data_frame_tag_columns=["location"],
+                            )
+                            logger.info(
+                                f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's G schedule has been successfully written to influxdb for location={location}"
+                            )
+
+                            write_api.write(
+                                os.environ.get("BUCKET_RAW"),
+                                org=os.environ.get("ORG"),
+                                # Since influxdb adds +2 hours internal (is always UTC)
+                                record=pivoted_flags_date.tz_localize(
+                                    "UTC"
+                                ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
+                                data_frame_measurement_name="Flags",
+                                data_frame_tag_columns=["location", "schedule"],
+                            )
+
+                            logger.info(
+                                f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's Flags schedule has been successfully written to influxdb for location={location}"
+                            )
+
+            else:
+                with pd.ExcelWriter(f"./excel/{location}/{filename}.xlsx") as writer:
+                    g_csv.drop(["location"], axis=1).to_excel(writer, sheet_name="G")
+                    i_csv.drop(["location"], axis=1).to_excel(writer, sheet_name="I")
+                    h_csv.drop(["location"], axis=1).to_excel(writer, sheet_name="H")
+                    pivoted_flags.to_excel(writer, sheet_name="Flags")
+                logger.info(
+                    f"file '{filename}.xlsx' was created for location={location}"
+                )
+
+                # Write schedules and flag dataframe to influxdb
+                write_api.write(
+                    os.environ.get("BUCKET_RAW"),
+                    os.environ.get("ORG"),
+                    # Since influxdb adds +2 hours internal (is always UTC)
+                    record=i_csv.tz_localize(
+                        "UTC"
+                    ),  # tz_localize("Europe/Berlin").tz_convert("UTC")
+                    data_frame_measurement_name="I",
+                    data_frame_tag_columns=["location"],
+                )
+                logger.info(
+                    f"file '{filename}.csv's I schedule has been successfully written to influxdb for location={location}"
+                )
+
+                write_api.write(
+                    os.environ.get("BUCKET_RAW"),
+                    os.environ.get("ORG"),
+                    # Since influxdb adds +2 hours internal (is always UTC)
+                    record=h_csv.tz_localize(
+                        "UTC"
+                    ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),
+                    data_frame_measurement_name="H",
+                    data_frame_tag_columns=["location"],
+                )
+                logger.info(
+                    f"file '{filename}.csv's H schedule has been successfully written to influxdb for location={location}"
+                )
+
+                write_api.write(
+                    os.environ.get("BUCKET_RAW"),
+                    os.environ.get("ORG"),
+                    # Since influxdb adds +2 hours internal (is always UTC)
+                    record=g_csv.tz_localize(
+                        "UTC"
+                    ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),
+                    data_frame_measurement_name="G",
+                    data_frame_tag_columns=["location"],
+                )
+
+                logger.info(
+                    f"file '{filename}.csv's G schedule has been successfully written to influxdb for location={location}"
+                )
+
+                write_api.write(
+                    os.environ.get("BUCKET_RAW"),
+                    org=os.environ.get("ORG"),
+                    # Since influxdb adds +2 hours internal (is always UTC)
+                    record=pivoted_flags.tz_localize(
+                        "UTC"
+                    ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
+                    data_frame_measurement_name="Flags",
+                    data_frame_tag_columns=["location", "schedule"],
+                )
+
+                logger.info(
+                    f"file '{filename}.csv's Flags schedule has been successfully written to influxdb for location={location}"
+                )
 
         except Exception as e:
             print(e)
