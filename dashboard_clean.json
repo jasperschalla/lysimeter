@@ -1,790 +1,790 @@
 {
-    "annotations": {
-      "list": [
-        {
-          "builtIn": 1,
-          "datasource": {
-            "type": "grafana",
-            "uid": "-- Grafana --"
-          },
-          "enable": true,
-          "hide": true,
-          "iconColor": "rgba(0, 211, 255, 1)",
-          "name": "Annotations & Alerts",
-          "type": "dashboard"
-        }
-      ]
-    },
-    "editable": true,
-    "fiscalYearStartMonth": 0,
-    "graphTooltip": 0,
-    "id": 4,
-    "links": [],
-    "liveNow": false,
-    "panels": [
+  "annotations": {
+    "list": [
       {
+        "builtIn": 1,
         "datasource": {
-          "type": "influxdb",
-          "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+          "type": "grafana",
+          "uid": "-- Grafana --"
         },
-        "gridPos": {
-          "h": 2,
-          "w": 24,
-          "x": 0,
-          "y": 0
-        },
-        "id": 3,
-        "options": {
-          "code": {
-            "language": "plaintext",
-            "showLineNumbers": false,
-            "showMiniMap": false
-          },
-          "content": "<p></p>\n<h1>Precipitation</h1>",
-          "mode": "markdown"
-        },
-        "pluginVersion": "9.5.2",
-        "transparent": true,
-        "type": "text"
-      },
-      {
-        "datasource": {
-          "type": "influxdb",
-          "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "fillOpacity": 80,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineWidth": 1,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Time"
-              },
-              "properties": [
-                {
-                  "id": "unit",
-                  "value": "time: YYYY-MM"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 24,
-          "x": 0,
-          "y": 2
-        },
-        "id": 1,
-        "options": {
-          "barRadius": 0,
-          "barWidth": 0.97,
-          "fullHighlight": false,
-          "groupWidth": 0.7,
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "right",
-            "showLegend": true
-          },
-          "orientation": "auto",
-          "showValue": "auto",
-          "stacking": "none",
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          },
-          "xField": "Time",
-          "xTickLabelRotation": 0,
-          "xTickLabelSpacing": 0
-        },
-        "pluginVersion": "9.5.2",
-        "targets": [
-          {
-            "datasource": {
-              "type": "influxdb",
-              "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-            },
-            "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"balance\")\n  |> filter(fn: (r) => r[\"_field\"] == \"D_PREC\")\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\n",
-            "refId": "A"
-          }
-        ],
-        "title": "Monthly Precipitation",
-        "transformations": [
-          {
-            "id": "renameByRegex",
-            "options": {
-              "regex": "D_PREC (.*)",
-              "renamePattern": "$1"
-            }
-          }
-        ],
-        "type": "barchart"
-      },
-      {
-        "datasource": {
-          "type": "influxdb",
-          "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "fillOpacity": 80,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineWidth": 1,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Time"
-              },
-              "properties": [
-                {
-                  "id": "unit",
-                  "value": "time: YYYY"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 24,
-          "x": 0,
-          "y": 10
-        },
-        "id": 4,
-        "options": {
-          "barRadius": 0,
-          "barWidth": 0.97,
-          "fullHighlight": false,
-          "groupWidth": 0.7,
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "right",
-            "showLegend": true
-          },
-          "orientation": "auto",
-          "showValue": "auto",
-          "stacking": "none",
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          },
-          "xField": "Time",
-          "xTickLabelRotation": 0,
-          "xTickLabelSpacing": 0
-        },
-        "pluginVersion": "9.5.2",
-        "targets": [
-          {
-            "datasource": {
-              "type": "influxdb",
-              "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-            },
-            "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"balance\")\n  |> filter(fn: (r) => r[\"_field\"] == \"D_PREC\")\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\n",
-            "refId": "A"
-          }
-        ],
-        "title": "Yearly Precipitation",
-        "transformations": [
-          {
-            "id": "renameByRegex",
-            "options": {
-              "regex": "D_PREC (.*)",
-              "renamePattern": "$1"
-            }
-          }
-        ],
-        "type": "barchart"
-      },
-      {
-        "datasource": {
-          "type": "influxdb",
-          "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-        },
-        "gridPos": {
-          "h": 2,
-          "w": 24,
-          "x": 0,
-          "y": 18
-        },
-        "id": 8,
-        "options": {
-          "code": {
-            "language": "plaintext",
-            "showLineNumbers": false,
-            "showMiniMap": false
-          },
-          "content": "<p></p>\n<h1>Evporation</h1>",
-          "mode": "markdown"
-        },
-        "pluginVersion": "9.5.2",
-        "transparent": true,
-        "type": "text"
-      },
-      {
-        "datasource": {
-          "type": "influxdb",
-          "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "fillOpacity": 80,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineWidth": 1,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Time"
-              },
-              "properties": [
-                {
-                  "id": "unit",
-                  "value": "time: YYYY-MM"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 24,
-          "x": 0,
-          "y": 20
-        },
-        "id": 2,
-        "options": {
-          "barRadius": 0,
-          "barWidth": 0.97,
-          "fullHighlight": false,
-          "groupWidth": 0.7,
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "right",
-            "showLegend": true
-          },
-          "orientation": "auto",
-          "showValue": "auto",
-          "stacking": "none",
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          },
-          "xField": "Time",
-          "xTickLabelRotation": 0,
-          "xTickLabelSpacing": 0
-        },
-        "pluginVersion": "9.5.2",
-        "targets": [
-          {
-            "datasource": {
-              "type": "influxdb",
-              "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-            },
-            "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"balance\")\n  |> filter(fn: (r) => r[\"_field\"] == \"D_EVAP\")\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\n",
-            "refId": "A"
-          }
-        ],
-        "title": "Monthly Evaporation",
-        "transformations": [
-          {
-            "id": "renameByRegex",
-            "options": {
-              "regex": "D_EVAP (.*)",
-              "renamePattern": "$1"
-            }
-          }
-        ],
-        "type": "barchart"
-      },
-      {
-        "datasource": {
-          "type": "influxdb",
-          "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "fillOpacity": 80,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineWidth": 1,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Time"
-              },
-              "properties": [
-                {
-                  "id": "unit",
-                  "value": "time: YYYY"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 24,
-          "x": 0,
-          "y": 28
-        },
-        "id": 5,
-        "options": {
-          "barRadius": 0,
-          "barWidth": 0.97,
-          "fullHighlight": false,
-          "groupWidth": 0.7,
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "right",
-            "showLegend": true
-          },
-          "orientation": "auto",
-          "showValue": "auto",
-          "stacking": "none",
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          },
-          "xField": "Time",
-          "xTickLabelRotation": 0,
-          "xTickLabelSpacing": 0
-        },
-        "pluginVersion": "9.5.2",
-        "targets": [
-          {
-            "datasource": {
-              "type": "influxdb",
-              "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-            },
-            "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"balance\")\n  |> filter(fn: (r) => r[\"_field\"] == \"D_EVAP\")\n  |> aggregateWindow(every: 1y, fn: sum, createEmpty: false)\n",
-            "refId": "A"
-          }
-        ],
-        "title": "Yearly Evaporation",
-        "transformations": [
-          {
-            "id": "renameByRegex",
-            "options": {
-              "regex": "D_EVAP (.*)",
-              "renamePattern": "$1"
-            }
-          }
-        ],
-        "type": "barchart"
-      },
-      {
-        "datasource": {
-          "type": "influxdb",
-          "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-        },
-        "gridPos": {
-          "h": 2,
-          "w": 24,
-          "x": 0,
-          "y": 36
-        },
-        "id": 9,
-        "options": {
-          "code": {
-            "language": "plaintext",
-            "showLineNumbers": false,
-            "showMiniMap": false
-          },
-          "content": "<p></p>\n<h1>Drainage</h1>",
-          "mode": "markdown"
-        },
-        "pluginVersion": "9.5.2",
-        "transparent": true,
-        "type": "text"
-      },
-      {
-        "datasource": {
-          "type": "influxdb",
-          "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "fillOpacity": 80,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineWidth": 1,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Time"
-              },
-              "properties": [
-                {
-                  "id": "unit",
-                  "value": "time: YYYY-MM"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 24,
-          "x": 0,
-          "y": 38
-        },
-        "id": 6,
-        "options": {
-          "barRadius": 0,
-          "barWidth": 0.97,
-          "fullHighlight": false,
-          "groupWidth": 0.7,
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "right",
-            "showLegend": true
-          },
-          "orientation": "auto",
-          "showValue": "auto",
-          "stacking": "none",
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          },
-          "xField": "Time",
-          "xTickLabelRotation": 0,
-          "xTickLabelSpacing": 0
-        },
-        "pluginVersion": "9.5.2",
-        "targets": [
-          {
-            "datasource": {
-              "type": "influxdb",
-              "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-            },
-            "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"balance\")\n  |> filter(fn: (r) => r[\"_field\"] == \"D_DRAIN\")\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\n",
-            "refId": "A"
-          }
-        ],
-        "title": "Monthly Drainage",
-        "transformations": [
-          {
-            "id": "renameByRegex",
-            "options": {
-              "regex": "D_DRAIN (.*)",
-              "renamePattern": "$1"
-            }
-          }
-        ],
-        "type": "barchart"
-      },
-      {
-        "datasource": {
-          "type": "influxdb",
-          "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "fillOpacity": 80,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineWidth": 1,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Time"
-              },
-              "properties": [
-                {
-                  "id": "unit",
-                  "value": "time: YYYY"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 24,
-          "x": 0,
-          "y": 46
-        },
-        "id": 7,
-        "options": {
-          "barRadius": 0,
-          "barWidth": 0.97,
-          "fullHighlight": false,
-          "groupWidth": 0.7,
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "right",
-            "showLegend": true
-          },
-          "orientation": "auto",
-          "showValue": "auto",
-          "stacking": "none",
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          },
-          "xField": "Time",
-          "xTickLabelRotation": 0,
-          "xTickLabelSpacing": 0
-        },
-        "pluginVersion": "9.5.2",
-        "targets": [
-          {
-            "datasource": {
-              "type": "influxdb",
-              "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
-            },
-            "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"balance\")\n  |> filter(fn: (r) => r[\"_field\"] == \"D_DRAIN\")\n  |> aggregateWindow(every: 1y, fn: sum, createEmpty: false)\n",
-            "refId": "A"
-          }
-        ],
-        "title": "Yearly Drainage",
-        "transformations": [
-          {
-            "id": "renameByRegex",
-            "options": {
-              "regex": "D_DRAIN (.*)",
-              "renamePattern": "$1"
-            }
-          }
-        ],
-        "type": "barchart"
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
       }
-    ],
-    "refresh": false,
-    "schemaVersion": 38,
-    "style": "dark",
-    "tags": [],
-    "templating": {
-      "list": []
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 4,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "<p></p>\n<h1>Precipitation</h1>",
+        "mode": "markdown"
+      },
+      "pluginVersion": "9.5.2",
+      "transparent": true,
+      "type": "text"
     },
-    "time": {
-      "from": "2023-09-27T00:00:00.000Z",
-      "to": "2023-10-08T23:59:59.000Z"
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "time: YYYY-MM"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 2
+      },
+      "id": 1,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Time",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+          },
+          "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"processed\")\n  |> filter(fn: (r) => r[\"_field\"] == \"D_PREC\")\n  |> filter(fn: (r) => r[\"component\"] == \"balance\")\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Monthly Precipitation",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "D_PREC (.*)",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "barchart"
     },
-    "timepicker": {},
-    "timezone": "",
-    "title": "Lysimeter Clean",
-    "uid": "c54e497d-029c-4b2b-af52-70f05610ff79",
-    "version": 3,
-    "weekStart": ""
-  }
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "time: YYYY"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "id": 4,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Time",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+          },
+          "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"processed\")\n  |> filter(fn: (r) => r[\"_field\"] == \"D_PREC\")\n  |> filter(fn: (r) => r[\"component\"] == \"balance\")\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Yearly Precipitation",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "D_PREC (.*)",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 8,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "<p></p>\n<h1>Evporation</h1>",
+        "mode": "markdown"
+      },
+      "pluginVersion": "9.5.2",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "time: YYYY-MM"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "id": 2,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Time",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+          },
+          "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"processed\")\n  |> filter(fn: (r) => r[\"_field\"] == \"D_EVAP\")\n  |> filter(fn: (r) => r[\"component\"] == \"balance\")\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Monthly Evaporation",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "D_EVAP (.*)",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "time: YYYY"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "id": 5,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Time",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+          },
+          "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"processed\")\n  |> filter(fn: (r) => r[\"_field\"] == \"D_EVAP\")\n  |> filter(fn: (r) => r[\"component\"] == \"balance\")\n  |> aggregateWindow(every: 1y, fn: sum, createEmpty: false)\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Yearly Evaporation",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "D_EVAP (.*)",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      },
+      "id": 9,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "<p></p>\n<h1>Drainage</h1>",
+        "mode": "markdown"
+      },
+      "pluginVersion": "9.5.2",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "time: YYYY-MM"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "id": 6,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Time",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+          },
+          "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"processed\")\n  |> filter(fn: (r) => r[\"_field\"] == \"D_DRAIN\")\n  |> filter(fn: (r) => r[\"component\"] == \"balance\")\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Monthly Drainage",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "D_DRAIN (.*)",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "time: YYYY"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 46
+      },
+      "id": 7,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Time",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+          },
+          "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"processed\")\n  |> filter(fn: (r) => r[\"_field\"] == \"D_DRAIN\")\n  |> filter(fn: (r) => r[\"component\"] == \"balance\")\n  |> aggregateWindow(every: 1y, fn: sum, createEmpty: false)\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Yearly Drainage",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "D_DRAIN (.*)",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "barchart"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Lysimeter Clean",
+  "uid": "c54e497d-029c-4b2b-af52-70f05610ff79",
+  "version": 4,
+  "weekStart": ""
+}

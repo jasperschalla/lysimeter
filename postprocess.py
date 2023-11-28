@@ -290,6 +290,8 @@ for lysimeter_index in range(len(df_h_lst)):
                     na_inidces_diff.index[na_inidces_diff != 1.0]
                 )
 
+                prec_df.loc[:, param] = result_values
+
                 # Loop over identified groups, check where the groups end and flag these time steps
                 for index in group_start_indices:
                     temp_df = prec_df[na_indices_group[index] :]

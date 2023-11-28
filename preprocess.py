@@ -389,7 +389,7 @@ with InfluxDBClient(
             pivoted_flags = pd.pivot(
                 merged_flags, values="reason", columns=["parameter"]
             )
-            pivoted_flags["schedule"] = "H"
+            pivoted_flags["schedule"] = "H"  # TODO: Fix this
             pivoted_flags.loc[:, "location"] = location
 
             available_dates_g = (
@@ -499,56 +499,60 @@ with InfluxDBClient(
                             f"file '{filename}.xlsx' was created for location={location}"
                         )
 
+                    g_csv["schedule"] = "G"
+                    i_csv["schedule"] = "I"
+                    h_csv["schedule"] = "H"
+
                     write_api.write(
-                        os.environ.get("BUCKET_RAW"),
+                        os.environ.get("BUCKET"),
                         os.environ.get("ORG"),
                         # Since influxdb adds +2 hours internal (is always UTC)
                         record=i_csv_date.tz_localize(
                             "UTC"
                         ),  # .tz_convert("Europe/Berlin"),
-                        data_frame_measurement_name="I",
-                        data_frame_tag_columns=["location"],
+                        data_frame_measurement_name="raw",
+                        data_frame_tag_columns=["location", "schedule"],
                     )
                     logger.info(
                         f"file '{filename}.csv's I schedule has been successfully written to influxdb for location={location}"
                     )
 
                     write_api.write(
-                        os.environ.get("BUCKET_RAW"),
+                        os.environ.get("BUCKET"),
                         os.environ.get("ORG"),
                         # Since influxdb adds +2 hours internal (is always UTC)
                         record=h_csv_date.tz_localize(
                             "UTC"
                         ),  # .tz_convert("Europe/Berlin"),
-                        data_frame_measurement_name="H",
-                        data_frame_tag_columns=["location"],
+                        data_frame_measurement_name="raw",
+                        data_frame_tag_columns=["location", "schedule"],
                     )
                     logger.info(
                         f"file '{filename}.csv's H schedule has been successfully written to influxdb for location={location}"
                     )
 
                     write_api.write(
-                        os.environ.get("BUCKET_RAW"),
+                        os.environ.get("BUCKET"),
                         os.environ.get("ORG"),
                         # Since influxdb adds +2 hours internal (is always UTC)
                         record=g_csv_date.tz_localize(
                             "UTC"
                         ),  # .tz_convert("Europe/Berlin"),
-                        data_frame_measurement_name="G",
-                        data_frame_tag_columns=["location"],
+                        data_frame_measurement_name="raw",
+                        data_frame_tag_columns=["location", "schedule"],
                     )
                     logger.info(
                         f"file '{filename}.csv's G schedule has been successfully written to influxdb for location={location}"
                     )
 
                     write_api.write(
-                        os.environ.get("BUCKET_RAW"),
-                        org=os.environ.get("ORG"),
+                        os.environ.get("BUCKET"),
+                        os.environ.get("ORG"),
                         # Since influxdb adds +2 hours internal (is always UTC)
                         record=pivoted_flags_date.tz_localize(
                             "UTC"
                         ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
-                        data_frame_measurement_name="Flags",
+                        data_frame_measurement_name="flags",
                         data_frame_tag_columns=["location", "schedule"],
                     )
                     logger.info(
@@ -674,60 +678,64 @@ with InfluxDBClient(
                                 )
                                 pivoted_flags_date.to_excel(writer, sheet_name="Flags")
 
+                            g_csv["schedule"] = "G"
+                            i_csv["schedule"] = "I"
+                            h_csv["schedule"] = "H"
+
                             logger.warning(
                                 f"Multiple dates in one file. file 'error_{error_date_name}T000.xlsx' has been created for location={location}. Extra postprocessing of file needed by running the script 'resolve_date_errors.py'"
                             )
 
                             write_api.write(
-                                os.environ.get("BUCKET_RAW"),
+                                os.environ.get("BUCKET"),
                                 os.environ.get("ORG"),
                                 # Since influxdb adds +2 hours internal (is always UTC)
                                 record=i_csv_date.tz_localize(
                                     "UTC"
                                 ),  # .tz_convert("Europe/Berlin"),
-                                data_frame_measurement_name="I",
-                                data_frame_tag_columns=["location"],
+                                data_frame_measurement_name="raw",
+                                data_frame_tag_columns=["location", "schedule"],
                             )
                             logger.info(
                                 f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's I schedule has been successfully written to influxdb for location={location}"
                             )
 
                             write_api.write(
-                                os.environ.get("BUCKET_RAW"),
+                                os.environ.get("BUCKET"),
                                 os.environ.get("ORG"),
                                 # Since influxdb adds +2 hours internal (is always UTC)
                                 record=h_csv_date.tz_localize(
                                     "UTC"
                                 ),  # .tz_convert("Europe/Berlin"),
-                                data_frame_measurement_name="H",
-                                data_frame_tag_columns=["location"],
+                                data_frame_measurement_name="raw",
+                                data_frame_tag_columns=["location", "schedule"],
                             )
                             logger.info(
                                 f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's H schedule has been successfully written to influxdb for location={location}"
                             )
 
                             write_api.write(
-                                os.environ.get("BUCKET_RAW"),
+                                os.environ.get("BUCKET"),
                                 os.environ.get("ORG"),
                                 # Since influxdb adds +2 hours internal (is always UTC)
                                 record=g_csv_date.tz_localize(
                                     "UTC"
                                 ),  # .tz_convert("Europe/Berlin"),
-                                data_frame_measurement_name="G",
-                                data_frame_tag_columns=["location"],
+                                data_frame_measurement_name="raw",
+                                data_frame_tag_columns=["location", "schedule"],
                             )
                             logger.info(
                                 f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's G schedule has been successfully written to influxdb for location={location}"
                             )
 
                             write_api.write(
-                                os.environ.get("BUCKET_RAW"),
+                                os.environ.get("BUCKET"),
                                 org=os.environ.get("ORG"),
                                 # Since influxdb adds +2 hours internal (is always UTC)
                                 record=pivoted_flags_date.tz_localize(
                                     "UTC"
                                 ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
-                                data_frame_measurement_name="Flags",
+                                data_frame_measurement_name="flags",
                                 data_frame_tag_columns=["location", "schedule"],
                             )
 
@@ -745,44 +753,48 @@ with InfluxDBClient(
                     f"file '{filename}.xlsx' was created for location={location}"
                 )
 
+                g_csv["schedule"] = "G"
+                i_csv["schedule"] = "I"
+                h_csv["schedule"] = "H"
+
                 # Write schedules and flag dataframe to influxdb
                 write_api.write(
-                    os.environ.get("BUCKET_RAW"),
+                    os.environ.get("BUCKET"),
                     os.environ.get("ORG"),
                     # Since influxdb adds +2 hours internal (is always UTC)
                     record=i_csv.tz_localize(
                         "UTC"
                     ),  # tz_localize("Europe/Berlin").tz_convert("UTC")
-                    data_frame_measurement_name="I",
-                    data_frame_tag_columns=["location"],
+                    data_frame_measurement_name="raw",
+                    data_frame_tag_columns=["location", "schedule"],
                 )
                 logger.info(
                     f"file '{filename}.csv's I schedule has been successfully written to influxdb for location={location}"
                 )
 
                 write_api.write(
-                    os.environ.get("BUCKET_RAW"),
+                    os.environ.get("BUCKET"),
                     os.environ.get("ORG"),
                     # Since influxdb adds +2 hours internal (is always UTC)
                     record=h_csv.tz_localize(
                         "UTC"
                     ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),
-                    data_frame_measurement_name="H",
-                    data_frame_tag_columns=["location"],
+                    data_frame_measurement_name="raw",
+                    data_frame_tag_columns=["location", "schedule"],
                 )
                 logger.info(
                     f"file '{filename}.csv's H schedule has been successfully written to influxdb for location={location}"
                 )
 
                 write_api.write(
-                    os.environ.get("BUCKET_RAW"),
+                    os.environ.get("BUCKET"),
                     os.environ.get("ORG"),
                     # Since influxdb adds +2 hours internal (is always UTC)
                     record=g_csv.tz_localize(
                         "UTC"
                     ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),
-                    data_frame_measurement_name="G",
-                    data_frame_tag_columns=["location"],
+                    data_frame_measurement_name="raw",
+                    data_frame_tag_columns=["location", "schedule"],
                 )
 
                 logger.info(
@@ -790,13 +802,13 @@ with InfluxDBClient(
                 )
 
                 write_api.write(
-                    os.environ.get("BUCKET_RAW"),
-                    org=os.environ.get("ORG"),
+                    os.environ.get("BUCKET"),
+                    os.environ.get("ORG"),
                     # Since influxdb adds +2 hours internal (is always UTC)
                     record=pivoted_flags.tz_localize(
                         "UTC"
                     ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
-                    data_frame_measurement_name="Flags",
+                    data_frame_measurement_name="flags",
                     data_frame_tag_columns=["location", "schedule"],
                 )
 
