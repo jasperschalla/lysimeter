@@ -27,6 +27,8 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb import InfluxDBClient as InfluxDBClientOld
 from penmon import Station
 import warnings
+from random import randint
+
 
 # Ignore warnings for concatenate empty pandas dataframes
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -58,7 +60,7 @@ default_lysimeter_matches = {
     "FE3": {"1": 2, "2": 4, "3": 4, "4": 6, "5": 6, "6": 5},
     "GW": {"1": 6, "2": 3, "3": 5, "4": 3, "5": 3, "6": 3},
     "RB1": {"1": 4, "2": 1, "3": 1, "4": 1, "5": 1, "6": 3},
-    "RB2": {"1": 2, "2": 1, "3": 2, "4": 2, "5": 2, "6": 5}
+    "RB2": {"1": 2, "2": 1, "3": 2, "4": 2, "5": 2, "6": 5},
 }
 
 
@@ -68,8 +70,6 @@ default_lysimeter_matches = {
 def reset_lysi_config():
     with open(os.path.join(src_path, "lysimeter_matches.json"), "w") as f:
         json.dump(default_lysimeter_matches, f)
-
-    st.rerun()
 
 
 def save_lysi_config(location, config):
@@ -213,14 +213,33 @@ def gap_undo_all(fill_date_selector, lysi_number, fill_type):
     if fill_type == "fill (lm)":
         remove_code = 2
         remove_msg = f"lysimeter {lysimeter_matches[location_summary][str(lysi_number+1)]} is also NA"
+        replace_code = -2
     else:
         remove_code = 1
         remove_msg = "edge case"
+
+        if fill_type == "fill (interpolation multi)":
+            replace_code = -2
+        else:
+            replace_code = -1
 
     start_date = fill_date_selector[0]
     end_date = fill_date_selector[1]
     start_index = data.index[data[data.columns[0]] >= start_date].tolist()[0]
     end_index = data.index[data[data.columns[0]] <= end_date].tolist()[-1]
+
+    if fill_type == "fill (interpolation multi)":
+        replace_condition = (
+            data.loc[start_index:end_index, col_selector_code] == remove_code
+        ) & (~data.loc[start_index:end_index, col_selector_groups].isnull())
+    elif fill_type == "fill (interpolation single)":
+        replace_condition = (
+            data.loc[start_index:end_index, col_selector_code] == remove_code
+        ) & (data.loc[start_index:end_index, col_selector_groups].isnull())
+    else:
+        replace_condition = (
+            data.loc[start_index:end_index, col_selector_code] == remove_code
+        )
 
     data.loc[
         start_index:end_index,
@@ -228,7 +247,7 @@ def gap_undo_all(fill_date_selector, lysi_number, fill_type):
             col_selector,
         ],
     ] = np.where(
-        data.loc[start_index:end_index, col_selector_code] == remove_code,
+        replace_condition,
         np.nan,
         data.loc[start_index:end_index, col_selector],
     )
@@ -239,7 +258,7 @@ def gap_undo_all(fill_date_selector, lysi_number, fill_type):
             col_selector_msg,
         ],
     ] = np.where(
-        data.loc[start_index:end_index, col_selector_code] == remove_code,
+        replace_condition,
         remove_msg,
         data.loc[start_index:end_index, col_selector_msg],
     )
@@ -250,7 +269,7 @@ def gap_undo_all(fill_date_selector, lysi_number, fill_type):
             col_selector_na_groups,
         ],
     ] = np.where(
-        data.loc[start_index:end_index, col_selector_code] == remove_code,
+        replace_condition,
         data.loc[start_index:end_index, col_selector_groups] + 1e6,
         data.loc[start_index:end_index, col_selector_na_groups],
     )
@@ -261,7 +280,7 @@ def gap_undo_all(fill_date_selector, lysi_number, fill_type):
             col_selector_groups,
         ],
     ] = np.where(
-        data.loc[start_index:end_index, col_selector_code] == remove_code,
+        replace_condition,
         np.nan,
         data.loc[start_index:end_index, col_selector_groups],
     )
@@ -272,8 +291,8 @@ def gap_undo_all(fill_date_selector, lysi_number, fill_type):
             col_selector_code,
         ],
     ] = np.where(
-        data.loc[start_index:end_index, col_selector_code] == remove_code,
-        (remove_code * -1),
+        replace_condition,
+        replace_code,
         data.loc[start_index:end_index, col_selector_code],
     )
 
@@ -284,9 +303,12 @@ def gap_undo_all(fill_date_selector, lysi_number, fill_type):
     st.rerun()
 
 
-def gap_undo_lm(na_date_selector, lysi_number):
+def gap_undo_multi(na_date_selector, lysi_number):
     datasets = st.session_state["datasets"]
     data = datasets[lysi_number]
+
+    remove_code = -2
+    remove_msg = f"lysimeter {lysimeter_matches[location_summary][str(lysi_number+1)]} is also NA"
 
     # Check for which date the gap is removed and update that file and remove the flags
     start_date = datetime.datetime.strptime(
@@ -313,14 +335,14 @@ def gap_undo_lm(na_date_selector, lysi_number):
         [
             col_selector_code,
         ],
-    ] = -2
+    ] = remove_code
     data.loc[
         start_index:end_index,
         [
             col_selector_msg,
         ],
-    ] = f"lysimeter {lysimeter_matches[location_summary][str(lysi_number+1)]} is also NA"
-    new_na_group_index = data.loc[:, col_selector_na_groups].max() + 1
+    ] = remove_msg
+    new_na_group_index = randint(1e3, 1e8)
     data.loc[
         start_index:end_index,
         [
@@ -1129,7 +1151,7 @@ try:
             data = datasets[gap_lysi_number]
 
             st.subheader(f"Lysimeter {lysimeter_selector}", divider="gray")
-            show_1 = show_2 = show_3 = show_4 = show_5 = True
+            show_1 = show_2 = show_3 = show_4 = show_4_interpolation = show_5 = True
 
             # Catch if data for a specific lysimeter is missing
             try:
@@ -1270,38 +1292,69 @@ try:
 
                 # Show multi gaps filled
                 for name, group in multi_gaps_grouped_filled:
-                    fig.add_vrect(
-                        x0=group.iloc[0, 0],
-                        x1=group.iloc[(group.shape[0] - 1), 0],
-                        fillcolor="#3abd68",
-                        opacity=0.25,
-                        line_width=0,
-                    )
-                    for x in [
-                        group.iloc[0, 0],
-                        group.iloc[(group.shape[0] - 1), 0],
-                    ]:
-                        fig.add_trace(
-                            go.Scattergl(
-                                x=[
-                                    x,
-                                    x,
-                                ],
-                                y=[
-                                    -5000,
-                                    5000,
-                                ],
-                                mode="lines",
-                                line=dict(color="#3abd68"),
-                                legendgroup="2",
-                                name="filled (lm)",
-                                showlegend=show_4,
-                                opacity=0.5,
-                            )
+                    if group.loc[group.index[0], col_selector_code] == 2:
+                        fig.add_vrect(
+                            x0=group.iloc[0, 0],
+                            x1=group.iloc[(group.shape[0] - 1), 0],
+                            fillcolor="#3abd68",
+                            opacity=0.25,
+                            line_width=0,
                         )
 
-                        if show_4:
-                            show_4 = False
+                        for x in [
+                            group.iloc[0, 0],
+                            group.iloc[(group.shape[0] - 1), 0],
+                        ]:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=[
+                                        x,
+                                        x,
+                                    ],
+                                    y=ylim,
+                                    mode="lines",
+                                    line=dict(color="#3abd68"),
+                                    legendgroup="2",
+                                    name="filled (lm)",
+                                    showlegend=show_4,
+                                    opacity=0.5,
+                                )
+                            )
+
+                            if show_4:
+                                show_4 = False
+
+                    else:
+                        fig.add_vrect(
+                            x0=group.iloc[0, 0],
+                            x1=group.iloc[(group.shape[0] - 1), 0],
+                            fillcolor="#a344ad",
+                            opacity=0.25,
+                            line_width=0,
+                        )
+
+                        for x in [
+                            group.iloc[0, 0],
+                            group.iloc[(group.shape[0] - 1), 0],
+                        ]:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=[
+                                        x,
+                                        x,
+                                    ],
+                                    y=ylim,
+                                    mode="lines",
+                                    line=dict(color="#a344ad"),
+                                    legendgroup="-1.5",
+                                    name="filled (interpolation multi)",
+                                    showlegend=show_4_interpolation,
+                                    opacity=0.5,
+                                )
+                            )
+
+                            if show_4_interpolation:
+                                show_4_interpolation = False
 
                 # Show multi gaps with remaining NAS
                 for name, group in multi_gaps_grouped_na:
@@ -1317,15 +1370,12 @@ try:
                         group.iloc[(group.shape[0] - 1), 0],
                     ]:
                         fig.add_trace(
-                            go.Scattergl(
+                            go.Scatter(
                                 x=[
                                     x,
                                     x,
                                 ],
-                                y=[
-                                    -5000,
-                                    5000,
-                                ],
+                                y=ylim,
                                 mode="lines",
                                 legendgroup="-2",
                                 line=dict(color="#db6363"),
@@ -1342,15 +1392,12 @@ try:
                 for index in range(col_selector_filled.shape[0]):
                     if col_selector_filled.loc[index, col_selector_code] == -1:
                         fig.add_trace(
-                            go.Scattergl(
+                            go.Scatter(
                                 x=[
                                     col_selector_filled.iloc[index, 0],
                                     col_selector_filled.iloc[index, 0],
                                 ],
-                                y=[
-                                    -5000,
-                                    5000,
-                                ],
+                                y=ylim,
                                 mode="lines",
                                 legendgroup="-1",
                                 line=dict(color="#dba053"),
@@ -1362,20 +1409,20 @@ try:
 
                         if show_1:
                             show_1 = False
-                    elif col_selector_filled.loc[index, col_selector_code] == 1:
+                    elif (
+                        col_selector_filled.loc[index, col_selector_code] == 1
+                        and col_selector_filled.loc[index, col_selector_groups] == None
+                    ):
                         fig.add_trace(
-                            go.Scattergl(
+                            go.Scatter(
                                 x=[
                                     col_selector_filled.iloc[index, 0],
                                     col_selector_filled.iloc[index, 0],
                                 ],
-                                y=[
-                                    -5000,
-                                    5000,
-                                ],
+                                y=ylim,
                                 mode="lines",
-                                line=dict(color="#538edb"),
-                                name="filled (interpolation)",
+                                line=dict(color="#a344ad"),
+                                name="filled (interpolation single)",
                                 showlegend=show_3,
                                 legendgroup="1",
                                 opacity=0.5,
@@ -1701,7 +1748,11 @@ try:
                     # Select which fill type should be undone
                     fill_type_selector = st.selectbox(
                         "Select fill type",
-                        ["fill (lm)", "fill (interpolation)"],
+                        [
+                            "fill (lm)",
+                            "fill (interpolation single)",
+                            "fill (interpolation multi)",
+                        ],
                         key="select_fill",
                     )
 
@@ -1710,6 +1761,18 @@ try:
                         [
                             f"{group.iloc[0,0]} to {group.iloc[(group.shape[0]-1),0]}"
                             for name, group in multi_gaps_grouped_filled
+                            if group.loc[group.index[0], col_selector_code] == 2
+                        ],
+                        key=lambda x: datetime.datetime.strptime(
+                            x.split("to")[0].strip(), "%Y-%m-%d %H:%M:%S"
+                        ),
+                    )
+
+                    multi_gaps_filled_labels_interpolation = sorted(
+                        [
+                            f"{group.iloc[0,0]} to {group.iloc[(group.shape[0]-1),0]}"
+                            for name, group in multi_gaps_grouped_filled
+                            if group.loc[group.index[0], col_selector_code] == 1
                         ],
                         key=lambda x: datetime.datetime.strptime(
                             x.split("to")[0].strip(), "%Y-%m-%d %H:%M:%S"
@@ -1718,12 +1781,17 @@ try:
 
                     # Available dates for single filled gaps
                     single_gaps_labels = col_selector_filled[
-                        col_selector_filled[col_selector_msg] == "linear interpolation"
+                        (
+                            col_selector_filled[col_selector_msg]
+                            == "linear interpolation"
+                        )
+                        & (col_selector_filled[col_selector_groups].isnull())
                     ]
 
                     fill_type_dict = {
                         "fill (lm)": multi_gaps_filled_labels,
-                        "fill (interpolation)": single_gaps_labels,
+                        "fill (interpolation single)": single_gaps_labels,
+                        "fill (interpolation multi)": multi_gaps_filled_labels_interpolation,
                     }
 
                     # Selector for date or date range
@@ -1742,8 +1810,9 @@ try:
                     ):
                         # For fills of multi gaps
                         if fill_type_selector == "fill (lm)":
-                            gap_undo_lm(na_date_selector, gap_lysi_number)
-
+                            gap_undo_multi(na_date_selector, gap_lysi_number)
+                        elif fill_type_selector == "fill (interpolation multi)":
+                            gap_undo_multi(na_date_selector, gap_lysi_number)
                         # For fills of single gaps
                         else:
                             gap_undo_interpolation(na_date_selector, gap_lysi_number)
@@ -1753,7 +1822,11 @@ try:
 
                     undo_type = st.selectbox(
                         "filled type",
-                        ["fill (lm)", "fill (interpolation)"],
+                        [
+                            "fill (lm)",
+                            "fill (interpolation single)",
+                            "fill (interpolation multi)",
+                        ],
                         key="select_undo_type",
                     )
 
@@ -1911,7 +1984,8 @@ try:
                     )
 
                 with reset_col:
-                    st.button("Reset", on_click=reset_lysi_config)
+                    if st.button("Reset", on_click=reset_lysi_config):
+                        st.rerun()
 
             st.write("Select lysimeter")
 
@@ -2944,9 +3018,16 @@ try:
                             (data_plot[data_plot.columns[0]] < fill_range_from)
                             | (data_plot[data_plot.columns[0]] > fill_range_to)
                         ]
-                        ymin_temp = data_plot_exlcuded[col_selector_post].min()
+                        filled_min = fill_df_plot[col_selector_post].min()
+                        filled_max = fill_df_plot[col_selector_post].max()
+
+                        ymin_temp = min(
+                            data_plot_exlcuded[col_selector_post].min(), filled_min
+                        )
                         ymin = ymin_temp - abs(0.001 * ymin_temp)
-                        ymax_temp = data_plot_exlcuded[col_selector_post].max()
+                        ymax_temp = max(
+                            data_plot_exlcuded[col_selector_post].max(), filled_max
+                        )
                         ymax = ymax_temp + abs(0.001 * ymax_temp)
 
                         fig_fill.update_layout(yaxis=dict(range=[ymin, ymax]))
