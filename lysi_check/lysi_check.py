@@ -3990,60 +3990,58 @@ try:
                                     post_fill_winter(
                                         pluvio_df, param_selector_post, post_lysi_number
                                     )
-
-                    ## Undo last action
-                    ################################################################################################
-
-                    undo_container = st.container()
-
-                    with undo_container:
-                        st.subheader("Undo last action", divider="red")
-
-                        st.info(
-                            "When changes have been made to this location, lysimeter, date range, type of operation and data type, the last action can be undone."
-                        )
-
-                    if st.button(
-                        "Undo",
-                        key="btn_undo",
-                        type="primary",
-                        disabled="previous_dataset" not in st.session_state
-                        or not isinstance(
-                            st.session_state["previous_dataset"], pd.DataFrame
-                        ),
-                    ):
-                        undo_last_action(post_lysi_number)
-
-                    with fig_post_spot:
-                        if downsample_data and data.shape[0] > 0:
-                            data_plot = (
-                                data.resample("H", on=data.columns[0])
-                                .mean()
-                                .reset_index()
-                            )
-                        else:
-                            data_plot = data
-
-                        # Lysimeter plot that shows the actual state of the data
-                        fig_post = go.Figure(
-                            layout=go.Layout(
-                                title=f"{col_selector_post} of Lysimeter {lysimeter_selector_post}"
-                            )
-                        )
-                        fig_post.add_scatter(
-                            x=data_plot[data_plot.columns[0]],
-                            y=data_plot[col_selector_post],
-                            mode="lines+markers",
-                            showlegend=False,
-                            marker=dict(size=2, color="#4574ba"),
-                        )
-
-                        st.plotly_chart(
-                            fig_post, use_container_width=True, **{"config": config}
-                        )
                 except Exception:
                     st.error(
                         "Some error occured during the winter filling! May be caused by problems with fetching the data."
+                    )
+
+                ## Undo last action
+                ################################################################################################
+
+                undo_container = st.container()
+
+                with undo_container:
+                    st.subheader("Undo last action", divider="red")
+
+                    st.info(
+                        "When changes have been made to this location, lysimeter, date range, type of operation and data type, the last action can be undone."
+                    )
+
+                if st.button(
+                    "Undo",
+                    key="btn_undo",
+                    type="primary",
+                    disabled="previous_dataset" not in st.session_state
+                    or not isinstance(
+                        st.session_state["previous_dataset"], pd.DataFrame
+                    ),
+                ):
+                    undo_last_action(post_lysi_number)
+
+                with fig_post_spot:
+                    if downsample_data and data.shape[0] > 0:
+                        data_plot = (
+                            data.resample("H", on=data.columns[0]).mean().reset_index()
+                        )
+                    else:
+                        data_plot = data
+
+                    # Lysimeter plot that shows the actual state of the data
+                    fig_post = go.Figure(
+                        layout=go.Layout(
+                            title=f"{col_selector_post} of Lysimeter {lysimeter_selector_post}"
+                        )
+                    )
+                    fig_post.add_scatter(
+                        x=data_plot[data_plot.columns[0]],
+                        y=data_plot[col_selector_post],
+                        mode="lines+markers",
+                        showlegend=False,
+                        marker=dict(size=2, color="#4574ba"),
+                    )
+
+                    st.plotly_chart(
+                        fig_post, use_container_width=True, **{"config": config}
                     )
 
             except Exception as e:
