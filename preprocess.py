@@ -195,8 +195,8 @@ with InfluxDBClient(
             for col in i_cols[1:]:
                 nr_df = i_csv[
                     (i_csv[col] == 999.8)
-                    | (i_csv[col] == -999.8)
-                    | (i_csv[col] == 999.0)
+                    | (i_csv[col] == 99.8)
+                    | (i_csv[col] == -991.0)
                 ].copy()
                 nr_df["parameter"] = col
                 nr_df["reason"] = "nr"
@@ -205,7 +205,7 @@ with InfluxDBClient(
                 oos_df["parameter"] = col
                 oos_df["reason"] = "oos"
 
-                nsc_df = i_csv[i_csv[col] == -99.8].copy()
+                nsc_df = i_csv[(i_csv[col] == -99.8) | (i_csv[col] == -999.8)].copy()
                 nsc_df["parameter"] = col
                 nsc_df["reason"] = "nsc"
 
@@ -215,6 +215,7 @@ with InfluxDBClient(
                         | (i_csv[col] == "overrange")
                         | (i_csv[col] == "Underrange")
                         | (i_csv[col] == "underrange")
+                        | (i_csv[col] == 999.0)
                     ].copy()
                     # ip_df = i_csv[
                     #     i_csv[col].str.contains(
@@ -285,8 +286,8 @@ with InfluxDBClient(
             for col in h_cols[1:]:
                 nr_df = h_csv[
                     (h_csv[col] == 999.8)
-                    | (h_csv[col] == -999.8)
-                    | (h_csv[col] == 999.0)
+                    | (h_csv[col] == 99.8)
+                    | (h_csv[col] == -991.0)
                 ].copy()
                 nr_df["parameter"] = col
                 nr_df["reason"] = "nr"
@@ -295,7 +296,7 @@ with InfluxDBClient(
                 oos_df["parameter"] = col
                 oos_df["reason"] = "oos"
 
-                nsc_df = h_csv[h_csv[col] == -99.8].copy()
+                nsc_df = h_csv[(h_csv[col] == -99.8) | (h_csv[col] == -999.8)].copy()
                 nsc_df["parameter"] = col
                 nsc_df["reason"] = "nsc"
 
@@ -305,6 +306,7 @@ with InfluxDBClient(
                         | (h_csv[col] == "overrange")
                         | (h_csv[col] == "Underrange")
                         | (h_csv[col] == "underrange")
+                        | (h_csv[col] == 999.0)
                     ].copy()
                     # ip_df = h_csv[
                     #     h_csv[col].str.contains(

@@ -1714,7 +1714,7 @@
               "options": {
                 "mode": "exclude",
                 "names": [
-                  "L_1_WAG_D_000 {location=\"FE2\", schedule=\"I\"}"
+                  "L_1_WAG_D_000"
                 ],
                 "prefix": "All except:",
                 "readOnly": true
@@ -1734,8 +1734,8 @@
         ]
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 10,
+        "w": 24,
         "x": 0,
         "y": 89
       },
@@ -1832,38 +1832,13 @@
             ]
           }
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "L_4_WAG_L_000 {location=\"FE2\", schedule=\"I\"}"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 89
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 99
       },
       "id": 21,
       "options": {
@@ -1912,9 +1887,9 @@
     "list": [
       {
         "current": {
-          "selected": false,
-          "text": "FE1",
-          "value": "FE1"
+          "selected": true,
+          "text": "FE2",
+          "value": "FE2"
         },
         "description": "Location of the Lysimeter",
         "hide": 0,
@@ -1924,12 +1899,12 @@
         "name": "location",
         "options": [
           {
-            "selected": true,
+            "selected": false,
             "text": "FE1",
             "value": "FE1"
           },
           {
-            "selected": false,
+            "selected": true,
             "text": "FE2",
             "value": "FE2"
           },
@@ -1962,13 +1937,13 @@
     ]
   },
   "time": {
-    "from": "now-6h",
-    "to": "now"
+    "from": "2020-12-31T22:00:00.000Z",
+    "to": "2023-12-31T21:59:59.000Z"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Lysimeter Raw",
   "uid": "d11a4ac6-a651-43ea-a974-1428d256623e",
-  "version": 41,
+  "version": 42,
   "weekStart": ""
 }
