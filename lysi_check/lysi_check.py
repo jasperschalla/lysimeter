@@ -29,6 +29,7 @@ from penmon import Station
 import warnings
 from random import randint
 import math
+from scipy.interpolate import splrep, splev
 
 # Ignore warnings for concatenate empty pandas dataframes
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -325,6 +326,22 @@ def finish_awat(datasets):
                     and len(first_quarter_data["Timestamp"].dt.date.unique().tolist())
                     > 2
                 ):
+                    first_spline = splrep(
+                        first_quarter_data[
+                            f"L_{index+1}_WAG_D_000_cumsum"
+                        ].index.tolist(),
+                        first_quarter_data[f"L_{index+1}_WAG_D_000_cumsum"].tolist(),
+                        s=200,
+                    )
+                    predicted_y = splev(
+                        first_quarter_data[
+                            f"L_{index+1}_WAG_D_000_cumsum"
+                        ].index.tolist(),
+                        first_spline,
+                    )
+
+                    first_quarter_data[f"L_{index+1}_WAG_D_000_cumsum"] = predicted_y
+
                     first_quarter_data.drop(
                         columns=[f"L_{index+1}_WAG_D_000", "year"]
                     ).to_csv(
@@ -336,6 +353,7 @@ def finish_awat(datasets):
                         header=False,
                         sep="\t",
                         index=False,
+                        float_format="%.8f",
                     )
 
                 if (
@@ -343,6 +361,22 @@ def finish_awat(datasets):
                     and len(second_quarter_data["Timestamp"].dt.date.unique().tolist())
                     > 2
                 ):
+                    second_spline = splrep(
+                        second_quarter_data[
+                            f"L_{index+1}_WAG_D_000_cumsum"
+                        ].index.tolist(),
+                        second_quarter_data[f"L_{index+1}_WAG_D_000_cumsum"].tolist(),
+                        s=200,
+                    )
+                    predicted_y = splev(
+                        second_quarter_data[
+                            f"L_{index+1}_WAG_D_000_cumsum"
+                        ].index.tolist(),
+                        second_spline,
+                    )
+
+                    second_quarter_data[f"L_{index+1}_WAG_D_000_cumsum"] = predicted_y
+
                     second_quarter_data.drop(
                         columns=[f"L_{index+1}_WAG_D_000", "year"]
                     ).to_csv(
@@ -354,6 +388,7 @@ def finish_awat(datasets):
                         header=False,
                         sep="\t",
                         index=False,
+                        float_format="%.8f",
                     )
 
                 if (
@@ -361,6 +396,21 @@ def finish_awat(datasets):
                     and len(third_quarter_data["Timestamp"].dt.date.unique().tolist())
                     > 2
                 ):
+                    third_spline = splrep(
+                        third_quarter_data[
+                            f"L_{index+1}_WAG_D_000_cumsum"
+                        ].index.tolist(),
+                        third_quarter_data[f"L_{index+1}_WAG_D_000_cumsum"].tolist(),
+                        s=200,
+                    )
+                    predicted_y = splev(
+                        third_quarter_data[
+                            f"L_{index+1}_WAG_D_000_cumsum"
+                        ].index.tolist(),
+                        third_spline,
+                    )
+
+                    third_quarter_data[f"L_{index+1}_WAG_D_000_cumsum"] = predicted_y
                     third_quarter_data.drop(
                         columns=[f"L_{index+1}_WAG_D_000", "year"]
                     ).to_csv(
@@ -372,6 +422,7 @@ def finish_awat(datasets):
                         header=False,
                         sep="\t",
                         index=False,
+                        float_format="%.8f",
                     )
 
                 if (
@@ -379,6 +430,21 @@ def finish_awat(datasets):
                     and len(fourth_quarter_data["Timestamp"].dt.date.unique().tolist())
                     > 2
                 ):
+                    fourth_spline = splrep(
+                        fourth_quarter_data[
+                            f"L_{index+1}_WAG_D_000_cumsum"
+                        ].index.tolist(),
+                        fourth_quarter_data[f"L_{index+1}_WAG_D_000_cumsum"].tolist(),
+                        s=200,
+                    )
+                    predicted_y = splev(
+                        fourth_quarter_data[
+                            f"L_{index+1}_WAG_D_000_cumsum"
+                        ].index.tolist(),
+                        fourth_spline,
+                    )
+
+                    fourth_quarter_data[f"L_{index+1}_WAG_D_000_cumsum"] = predicted_y
                     fourth_quarter_data.drop(
                         columns=[f"L_{index+1}_WAG_D_000", "year"]
                     ).to_csv(
@@ -390,6 +456,7 @@ def finish_awat(datasets):
                         header=False,
                         sep="\t",
                         index=False,
+                        float_format="%.8f",
                     )
         reset_data()
         st.rerun()
@@ -1114,8 +1181,8 @@ def correct_water_release(water_weight):
     extra_release_periods = np.sum(
         sliding_window_view(water_release_corrected.to_numpy(), 30), axis=1
     )
-    lower_thresh = extra_release_periods <= -4
-    upper_thresh = extra_release_periods >= -13
+    lower_thresh = np.absolute(extra_release_periods) >= 4  # <= -4
+    upper_thresh = np.absolute(extra_release_periods) <= 37.5  # >= -37.5
     cond_thresh = np.logical_and(lower_thresh, upper_thresh)
     cond_indices = np.where(cond_thresh)[0]
     # build differences of indices for moving window surpassing the threshold to build groups
@@ -1310,6 +1377,7 @@ def reset_data():
     st.session_state["read_path"] = None
     st.session_state["ec_data"] = None
     st.session_state["previous_dataset"] = None
+    st.session_state["pump_data"] = None
 
 
 def reset_previous_dataset():
@@ -3168,6 +3236,11 @@ try:
                                         missing="drop",
                                     )
                                     lm = model.fit()
+                                    # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
+                                    if len(lm.params) == 1:
+                                        lm.params = np.concatenate(
+                                            [np.array([0.0]), lm.params]
+                                        )
 
                                     # Calculate values based on regression model
                                     fill_values_post = (
@@ -3845,134 +3918,418 @@ try:
                                     st.error("The selected date range is not valid.")
                                     st.stop()
 
-                        avg_dynamic = (
-                            data[
-                                (data[data.columns[0]] >= delta_dynamic_range_from)
-                                & (data[data.columns[0]] <= delta_dynamic_range_to)
-                            ][col_selector_post]
-                            .diff()
-                            .mean()
-                        )
+                            avg_dynamic = (
+                                data[
+                                    (data[data.columns[0]] >= delta_dynamic_range_from)
+                                    & (data[data.columns[0]] <= delta_dynamic_range_to)
+                                ][col_selector_post]
+                                .diff()
+                                .mean()
+                            )
 
-                        if np.isnan(avg_dynamic):
-                            st.error("The calculated mean average changing rate is NA.")
-                            dynamic_error = True
-                        else:
-                            fill_dynamic_df = data.copy()[
-                                (
-                                    data[data.columns[0]]
-                                    >= (
-                                        fill_dynamic_range_from
-                                        - datetime.timedelta(minutes=1)
+                            if np.isnan(avg_dynamic):
+                                st.error(
+                                    "The calculated mean average changing rate is NA."
+                                )
+                                dynamic_error = True
+                            else:
+                                fill_dynamic_df = data.copy()[
+                                    (
+                                        data[data.columns[0]]
+                                        >= (
+                                            fill_dynamic_range_from
+                                            - datetime.timedelta(minutes=1)
+                                        )
+                                    )
+                                    & (
+                                        data[data.columns[0]]
+                                        <= (
+                                            fill_dynamic_range_to
+                                            + datetime.timedelta(minutes=1)
+                                        )
+                                    )
+                                ][col_selector_post]
+
+                                if np.isnan(fill_dynamic_df.iloc[0]) or np.isnan(
+                                    fill_dynamic_df.iloc[-1]
+                                ):
+                                    st.error(
+                                        "The selected fill range contains NAs at the edges. Please select a range without NAs at the edges."
+                                    )
+                                    dynamic_error = True
+
+                                if not fill_dynamic_df.loc[1:-1].isna().all():
+                                    st.warning(
+                                        "The selected fill range contains not NAs. These get overwritten."
+                                    )
+
+                                fill_dynamic = fill_dynamic_df.to_numpy()[:-1]
+
+                                number_steps = math.floor(
+                                    (47.5 - fill_dynamic[0]) / avg_dynamic
+                                )
+
+                                if number_steps > (len(fill_dynamic) - 1):
+                                    st.error(
+                                        "No interpolation with average changing rate possible: The average changing rate is too low."
+                                    )
+                                    dynamic_error = True
+                                else:
+                                    fill_dynamic[1 : (number_steps + 1)] = avg_dynamic
+                                    fill_dynamic = np.cumsum(fill_dynamic)
+                                    fill_dynamic[(number_steps + 6)] = 37.5
+
+                                    interpolate_series = data[col_selector_post].copy()
+                                    interpolate_series.iloc[
+                                        fill_dynamic_df.index[
+                                            0
+                                        ] : fill_dynamic_df.index[-1]
+                                    ] = fill_dynamic
+                                    interpolate_series = (
+                                        interpolate_series.interpolate()
+                                    )
+                                    replace_df = data.copy()[
+                                        (
+                                            data[data.columns[0]]
+                                            >= (fill_dynamic_range_from)
+                                        )
+                                        & (
+                                            data[data.columns[0]]
+                                            <= (fill_dynamic_range_to)
+                                        )
+                                    ]
+                                    replace_df[col_selector_post] = interpolate_series
+
+                            if dynamic_preview and not dynamic_error:
+                                fig_dynamic = go.Figure(
+                                    layout=go.Layout(
+                                        title="Water Tank Weight Dynamic Preview",
+                                        height=400,
                                     )
                                 )
-                                & (
-                                    data[data.columns[0]]
-                                    <= (
-                                        fill_dynamic_range_to
-                                        + datetime.timedelta(minutes=1)
+
+                                if downsample_data and replace_df.shape[0] > 0:
+                                    replace_df_plot = (
+                                        replace_df.resample(
+                                            "H", on=replace_df.columns[0]
+                                        )
+                                        .mean()
+                                        .reset_index()
+                                    )
+                                else:
+                                    replace_df_plot = replace_df
+
+                                fig_dynamic.add_trace(
+                                    go.Scattergl(
+                                        x=replace_df_plot[replace_df_plot.columns[0]],
+                                        y=replace_df_plot[col_selector_post],
+                                        mode="markers+lines",
+                                        marker=dict(size=2, color="red"),
+                                        name="replaced",
                                     )
                                 )
-                            ][col_selector_post]
 
-                            if np.isnan(fill_dynamic_df.iloc[0]) or np.isnan(
-                                fill_dynamic_df.iloc[-1]
+                                fig_dynamic.add_trace(
+                                    go.Scattergl(
+                                        x=data_plot[data_plot.columns[0]],
+                                        y=data_plot[col_selector_post],
+                                        mode="markers+lines",
+                                        marker=dict(size=2, color="#4574ba"),
+                                        name="original",
+                                    )
+                                )
+
+                                st.plotly_chart(
+                                    fig_dynamic,
+                                    use_container_width=True,
+                                    **{"config": config},
+                                )
+
+                            if st.button(
+                                "Apply",
+                                key="dynamic_fill",
+                                disabled=dynamic_error,
+                                type="primary",
                             ):
-                                st.error(
-                                    "The selected fill range contains NAs at the edges. Please select a range without NAs at the edges."
+                                fill_start_index = replace_df.index[0]
+                                fill_end_index = replace_df.index[-1]
+                                post_fill(
+                                    fill_start_index,
+                                    fill_end_index,
+                                    col_selector_post,
+                                    post_lysi_number,
+                                    replace_df[col_selector_post].tolist(),
                                 )
-                                dynamic_error = True
 
-                            if not fill_dynamic_df.loc[1:-1].isna().all():
-                                st.warning(
-                                    "The selected fill range contains not NAs. These get overwritten."
+                        # Use pumping model to correct water tank weight
+                        ################################################################################################
+
+                        pump_container = st.container()
+
+                        with pump_container:
+                            st.subheader("Pump Rate Correction", divider="red")
+                            rel_path = read_path.split("/")[-2]
+                            pump_path = re.sub(rel_path, "additional_filled", read_path)
+
+                            pump_preview = st.checkbox("Show preview", value=False)
+                            if "pump_data" not in st.session_state or not isinstance(
+                                st.session_state.pump_data, list
+                            ):
+                                if st.button("Load Pumping Data", type="primary"):
+                                    try:
+                                        relevant_pump_files = [
+                                            file
+                                            for file in os.listdir(pump_path)
+                                            if not file == ".DS_Store"
+                                            and format_file_date(file)
+                                            >= file_selector[0]
+                                            and format_file_date(file)
+                                            <= file_selector[1]
+                                        ]
+                                        pump_data = read_data(
+                                            pump_path,
+                                            relevant_pump_files,
+                                            type_selector,
+                                        )
+                                        st.session_state["pump_data"] = pump_data
+                                    except OverflowError as e:
+                                        print(e)
+                                        st.write(
+                                            f":red[No {type_selector} location folder for {data_selector} pumping files available]"
+                                        )
+                            # Columns for from and to date range
+                            if "pump_data" in st.session_state and isinstance(
+                                st.session_state.pump_data, list
+                            ):
+                                pump_error = False
+                                lysimeter = lysimeter_selector_post
+                                pump_data = st.session_state["pump_data"][
+                                    lysimeter - 1
+                                ][
+                                    [
+                                        data.columns[0],
+                                        f"L_{lysimeter}_PUC_S_POS",
+                                        f"L_{lysimeter}_PUC_S_NEG",
+                                    ]
+                                ].rename(
+                                    {
+                                        f"L_{lysimeter}_PUC_S_POS": "PUMP_POS",
+                                        f"L_{lysimeter}_PUC_S_NEG": "PUMP_NEG",
+                                    },
+                                    axis=1,
+                                )
+                                (
+                                    pump_from_col,
+                                    pump_to_col,
+                                ) = st.columns(2)
+
+                                with pump_from_col:
+                                    from_date_start = data[data.columns[0]].tolist()[0]
+                                    # From date
+                                    pump_date_from = st.date_input(
+                                        "From",
+                                        from_date_start,
+                                        from_date_start,
+                                        data[data.columns[0]].tolist()[-1],
+                                        key="pump_date_from",
+                                    )
+
+                                    # From time
+                                    pump_time_from = st.time_input(
+                                        "From",
+                                        datetime.datetime.strptime(
+                                            "00:00:00", "%H:%M:%S"
+                                        ).time(),
+                                        key="pump_time_from",
+                                        label_visibility="hidden",
+                                        step=10 * 60,
+                                    )
+
+                                    pump_range_from = datetime.datetime.combine(
+                                        pump_date_from,
+                                        pump_time_from,
+                                    )
+
+                                with pump_to_col:
+                                    to_date_start = data[
+                                        data[data.columns[0]] >= pump_range_from
+                                    ][data.columns[0]].tolist()[0]
+                                    # To date
+                                    pump_date_to = st.date_input(
+                                        "To",
+                                        to_date_start,
+                                        to_date_start,
+                                        data[data.columns[0]].tolist()[-1],
+                                        key="pump_date_to",
+                                    )
+
+                                    # To time
+                                    pump_time_to = st.time_input(
+                                        "To",
+                                        to_date_start.time(),
+                                        key="pump_time_to",
+                                        label_visibility="hidden",
+                                        step=10 * 60,
+                                    )
+
+                                    pump_range_to = datetime.datetime.combine(
+                                        pump_date_to, pump_time_to
+                                    )
+
+                                if pump_range_from > pump_range_to:
+                                    st.error("The selected date range is not valid.")
+                                    st.stop()
+
+                                st.info(
+                                    "The pumping data has a resolution of 10 minutes in contrast to the weight data. Therefore, the predicted weight data from the pumping data needs to be upscaled to the resolution of the weight data."
                                 )
 
-                            fill_dynamic = fill_dynamic_df.to_numpy()[:-1]
-
-                            number_steps = math.floor(
-                                (47.5 - fill_dynamic[0]) / avg_dynamic
-                            )
-
-                            if number_steps > (len(fill_dynamic) - 1):
-                                st.error(
-                                    "No interpolation with average changing rate possible: The average changing rate is too low."
+                                pump_upscale = st.radio(
+                                    "Select upscaling method",
+                                    ["zero changing rate", "interpolation"],
+                                    captions=[
+                                        "Set changing rates to zero in between the available pumping rates",
+                                        "Interpolate changing rates in between the available pumping rates",
+                                    ],
                                 )
-                                dynamic_error = True
-                            else:
-                                fill_dynamic[1 : (number_steps + 1)] = avg_dynamic
-                                fill_dynamic = np.cumsum(fill_dynamic)
-                                fill_dynamic[(number_steps + 6)] = 37.5
 
-                                interpolate_series = data[col_selector_post].copy()
-                                interpolate_series.iloc[
-                                    fill_dynamic_df.index[0] : fill_dynamic_df.index[-1]
-                                ] = fill_dynamic
-                                interpolate_series = interpolate_series.interpolate()
-                                replace_df = data.copy()[
-                                    (data[data.columns[0]] >= (fill_dynamic_range_from))
-                                    & (data[data.columns[0]] <= (fill_dynamic_range_to))
-                                ]
-                                replace_df[col_selector_post] = interpolate_series
+                                if data.iloc[0, 0] == pump_range_from:
+                                    pump_error = True
+                                    st.error(
+                                        "The correction cannot be applied at the edges of the loaded data."
+                                    )
+                                else:
+                                    data_start_index = (
+                                        data.index[
+                                            data[data.columns[0]] == pump_range_from
+                                        ][0]
+                                        - 1
+                                    )
+                                    data_end_index = data.index[
+                                        data[data.columns[0]] == pump_range_to
+                                    ][0]
 
-                        if dynamic_preview and not dynamic_error:
-                            fig_dynamic = go.Figure(
-                                layout=go.Layout(
-                                    title="Water Tank Weight Dynamic Preview",
-                                    height=400,
-                                )
-                            )
+                                    data_pump = data.loc[
+                                        data_start_index:data_end_index,
+                                        [data.columns[0], col_selector_post],
+                                    ].copy()
 
-                            if downsample_data and replace_df.shape[0] > 0:
-                                replace_df_plot = (
-                                    replace_df.resample("H", on=replace_df.columns[0])
-                                    .mean()
-                                    .reset_index()
-                                )
-                            else:
-                                replace_df_plot = replace_df
+                                    pump_input = pump_data[
+                                        pump_data[pump_data.columns[0]].between(
+                                            pump_range_from, pump_range_to
+                                        )
+                                    ]
+                                    pump_input["pred"] = (
+                                        -8.34635149e-05 * pump_input["PUMP_POS"]
+                                        + 1.13169814e-04 * pump_input["PUMP_NEG"]
+                                    )
 
-                            fig_dynamic.add_trace(
-                                go.Scattergl(
-                                    x=replace_df_plot[replace_df_plot.columns[0]],
-                                    y=replace_df_plot[col_selector_post],
-                                    mode="markers+lines",
-                                    marker=dict(size=2, color="red"),
-                                    name="replaced",
-                                )
-                            )
+                                    if pump_upscale == "zero changing rate":
+                                        pump_input["pred"].fillna(0, inplace=True)
+                                    else:
+                                        pump_input["pred"].interpolate(inplace=True)
 
-                            fig_dynamic.add_trace(
-                                go.Scattergl(
-                                    x=data_plot[data_plot.columns[0]],
-                                    y=data_plot[col_selector_post],
-                                    mode="markers+lines",
-                                    marker=dict(size=2, color="#4574ba"),
-                                    name="original",
-                                )
-                            )
+                                    if pump_input["pred"].isna().any():
+                                        st.warning(
+                                            "There are NAs in the corrected data. This can be due to NA in the pumping rate data."
+                                        )
 
-                            st.plotly_chart(
-                                fig_dynamic,
-                                use_container_width=True,
-                                **{"config": config},
-                            )
+                                        if pump_input["pred"].isna().all():
+                                            st.error(
+                                                "All values are NA. This can be due to a wrong date range."
+                                            )
+                                            pump_error = True
 
-                        if st.button(
-                            "Apply",
-                            key="dynamic_fill",
-                            disabled=dynamic_error,
-                            type="primary",
-                        ):
-                            fill_start_index = replace_df.index[0]
-                            fill_end_index = replace_df.index[-1]
-                            post_fill(
-                                fill_start_index,
-                                fill_end_index,
-                                col_selector_post,
-                                post_lysi_number,
-                                replace_df[col_selector_post].tolist(),
-                            )
+                                    if not pump_error:
+                                        pump_fill_values = (
+                                            pd.Series(
+                                                data_pump[col_selector_post].tolist()[0]
+                                            )
+                                            .append(pump_input["pred"])
+                                            .cumsum()
+                                        )
+
+                                        cumsum_range = np.maximum(
+                                            math.ceil(
+                                                (
+                                                    pump_fill_values.dropna().iloc[-1]
+                                                    - 37.5
+                                                )
+                                                / 10
+                                            ),
+                                            1,
+                                        )
+                                        cumsum_lst = []
+
+                                        for i in range(1, cumsum_range + 1):
+                                            cumsum_part = pump_fill_values[
+                                                pump_fill_values <= 47.5
+                                            ]
+                                            remove_indexes = cumsum_part.index.tolist()
+                                            if (cumsum_part.iloc[-1] + 0.5) >= 47.5:
+                                                pump_fill_values = (
+                                                    pump_fill_values.drop(
+                                                        remove_indexes
+                                                    ).diff()
+                                                )
+                                            if pump_fill_values.shape[0] > 0:
+                                                pump_fill_values.iloc[0] = 37.5
+                                                pump_fill_values = (
+                                                    pump_fill_values.cumsum()
+                                                )
+                                            cumsum_lst.append(cumsum_part.to_numpy())
+
+                                        pump_fill_values = np.concatenate(cumsum_lst)
+
+                                if pump_preview and not pump_error:
+                                    fig_pump = go.Figure(
+                                        layout=go.Layout(
+                                            title=f"Corrected Water Tank Weight for {col_selector_post}",
+                                            height=500,
+                                        )
+                                    )
+
+                                    fig_pump.add_trace(
+                                        go.Scattergl(
+                                            x=data_plot[data_plot.columns[0]],
+                                            y=data_plot[col_selector_post],
+                                            mode="lines+markers",
+                                            marker=dict(size=2, color="#4574ba"),
+                                            name="original",
+                                            showlegend=True,
+                                        )
+                                    )
+
+                                    fig_pump.add_trace(
+                                        go.Scattergl(
+                                            x=data_pump[data_pump.columns[0]],
+                                            y=pump_fill_values,
+                                            mode="lines+markers",
+                                            marker=dict(size=2, color="red"),
+                                            name="corrected",
+                                            showlegend=True,
+                                        )
+                                    )
+
+                                    st.plotly_chart(
+                                        fig_pump,
+                                        use_container_width=True,
+                                        **{"config": config},
+                                    )
+
+                                if st.button(
+                                    "Correct",
+                                    type="primary",
+                                    key="pump_correct",
+                                    disabled=pump_error,
+                                ):
+                                    post_fill(
+                                        data_start_index,
+                                        data_end_index,
+                                        col_selector_post,
+                                        post_lysi_number,
+                                        pump_fill_values,
+                                    )
 
                     if (
                         data_selector == "balance"
@@ -4209,6 +4566,11 @@ try:
                                                         missing="drop",
                                                     )
                                                     lm = model.fit()
+                                                    # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
+                                                    if len(lm.params) == 1:
+                                                        lm.params = np.concatenate(
+                                                            [np.array([0.0]), lm.params]
+                                                        )
 
                                                     pluvio_fill_values = (
                                                         lm.params[0]
@@ -4279,6 +4641,11 @@ try:
                                                         missing="drop",
                                                     )
                                                     lm = model.fit()
+                                                    # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
+                                                    if len(lm.params) == 1:
+                                                        lm.params = np.concatenate(
+                                                            [np.array([0.0]), lm.params]
+                                                        )
 
                                                 # Calculate time difference between each albedo value
                                                 timestep = (
@@ -4522,6 +4889,11 @@ try:
                                                 missing="drop",
                                             )
                                             lm = model.fit()
+                                            # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
+                                            if len(lm.params) == 1:
+                                                lm.params = np.concatenate(
+                                                    [np.array([0.0]), lm.params]
+                                                )
 
                                             pluvio_fill_values = (
                                                 lm.params[0]
