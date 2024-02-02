@@ -8,8 +8,8 @@ for file in ./original/*.DBD; do
     now=$(date +'%Y-%m-%d %H:%M:%S')
 
     echo "$now - INFO    :./dumped/$filename.csv and ./dumped_head/$filename.csv was created for location=$1" >> ./lysi_data.log
-    ./dumpdbd.out -n $file > "./dumped/$filename.csv"
-    ./dumpdbd.out -d $file > "./dumped_head/$filename.csv"
+    ./dumpdbd.out -n -i $file > "./dumped/$filename.csv"
+    ./dumpdbd.out -d -i $file > "./dumped_head/$filename.csv"
     python preprocess.py ./dumped/"$filename".csv $1
     python postprocess.py ./excel/"$filename".xlsx $1
 done

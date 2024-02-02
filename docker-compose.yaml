@@ -47,6 +47,7 @@ services:
       - ../processing/balance_filled/:/usr/app/src/balance_filled
       - ../processing/balance_post/:/usr/app/src/balance_post
       - ../processing/balance_final/:/usr/app/src/balance_final
+      - ../processing/balance_awat/:/usr/app/src/balance_awat
       - ../processing/balance_finished/:/usr/app/src/balance_finished
       - ../processing/additional_filled/:/usr/app/src/additional_filled
       - ../processing/additional_post/:/usr/app/src/additional_post

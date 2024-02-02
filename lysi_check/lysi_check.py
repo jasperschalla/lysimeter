@@ -68,6 +68,47 @@ default_lysimeter_matches = {
 # Helper functions
 
 
+def get_polyline(series, degree, splits):
+    data_array = series.to_numpy()
+
+    # Split pandas series into multiple pieces and loop over them, adding them to a list that can be concatenated at the end
+    data_array_split = np.array_split(data_array, splits)
+    predicted_poly = []
+
+    for data_array in data_array_split:
+        # get np array from 0 to length of data array
+        index = np.arange(data_array.shape[0])
+        poly = np.polyfit(index, data_array, degree)
+        poly_fun = np.poly1d(poly)
+        predicted_poly_temp = poly_fun(index)
+
+        if len(predicted_poly) > 0:
+            combined = np.concatenate((predicted_poly[-1], predicted_poly_temp))
+            data_type = (
+                pd.Series(["old", "new"])
+                .repeat([predicted_poly[-1].shape[0], predicted_poly_temp.shape[0]])
+                .to_numpy()
+            )
+            combined_df = pd.DataFrame({"x": combined, "type": data_type})
+            combined_df["x"] = pd.to_numeric(combined_df["x"])
+            combined_df.loc[
+                (data_array.shape[0] - 50) : (data_array.shape[0] + 50), "x"
+            ] = np.nan
+            combined_df["x"] = combined_df["x"].interpolate(method="linear")
+            predicted_poly_temp = combined_df[combined_df["type"] == "new"][
+                "x"
+            ].to_numpy()
+            predicted_poly[-1] = combined_df[combined_df["type"] == "old"][
+                "x"
+            ].to_numpy()
+
+        predicted_poly.append(predicted_poly_temp)
+
+    predicted_poly = np.concatenate(predicted_poly)
+
+    return predicted_poly
+
+
 def filter_poly_residuals(series, degree):
     data_array = series.to_numpy()
 
@@ -3610,137 +3651,156 @@ try:
                 if balance_toolbox:
                     # Smooth rising water tank weight
                     ################################################################################################
+                    smooth_container = st.container()
 
-                    if data_selector == "balance" and re.match(
-                        ".*WAG_D_000.*", col_selector_post
-                    ):
-                        smooth_container = st.container()
+                    with smooth_container:
+                        st.subheader("Smooth Data", divider="red")
 
-                        with smooth_container:
-                            st.subheader("Smooth Water Tank Weight", divider="red")
+                        st.info(
+                            "In case this tool is used for water tank data, it is only suitable for rising water tank weight withouth water release events."
+                        )
 
-                            st.info(
-                                "This tool is only situated for rising water tank weight withouth water release events."
+                        smooth_preview = st.checkbox(
+                            "Show preview", value=False, key="smooth_preview"
+                        )
+                        smooth_error = False
+
+                        smooth_options1, smooth_option2 = st.columns(2)
+
+                        with smooth_options1:
+                            smooth_type = st.selectbox(
+                                "Smooth Type",
+                                ["Residuals Filtering", "Polyline"],
+                                key="smooth_type",
                             )
 
-                            smooth_preview = st.checkbox(
-                                "Show preview", value=False, key="smooth_preview"
+                        with smooth_option2:
+                            if smooth_type != "Residuals Filtering":
+                                smooth_split_size = st.number_input(
+                                    "Select split size", 1, 10000, 10
+                                )
+
+                        poly_degree = st.slider("Select degree of polynomial", 1, 10, 5)
+
+                        smooth_from_col, smooth_to_col = st.columns(2)
+
+                        with smooth_from_col:
+                            from_date_start = data[data.columns[0]].tolist()[0]
+
+                            # From date
+                            smooth_date_from = st.date_input(
+                                "From",
+                                from_date_start,
+                                from_date_start,
+                                data[data.columns[0]].tolist()[-1],
+                                key="smooth_date_from",
                             )
-                            smooth_error = False
 
-                            poly_degree = st.slider(
-                                "Select degree of polynomial", 1, 10, 5
+                            # From time
+                            smooth_time_from = st.time_input(
+                                "From",
+                                datetime.datetime.strptime(
+                                    "00:00:00", "%H:%M:%S"
+                                ).time(),
+                                key="smooth_time_from",
+                                label_visibility="hidden",
                             )
 
-                            smooth_from_col, smooth_to_col = st.columns(2)
+                            smooth_range_from = datetime.datetime.combine(
+                                smooth_date_from, smooth_time_from
+                            )
 
-                            with smooth_from_col:
-                                from_date_start = data[data.columns[0]].tolist()[0]
+                        with smooth_to_col:
+                            to_date_start = data[
+                                data[data.columns[0]] >= smooth_range_from
+                            ][data.columns[0]].tolist()[0]
 
-                                # From date
-                                smooth_date_from = st.date_input(
-                                    "From",
-                                    from_date_start,
-                                    from_date_start,
-                                    data[data.columns[0]].tolist()[-1],
-                                    key="smooth_date_from",
-                                )
+                            # From date
+                            smooth_date_to = st.date_input(
+                                "To",
+                                to_date_start,
+                                to_date_start,
+                                data[data.columns[0]].tolist()[-1],
+                                key="smooth_date_to",
+                            )
 
-                                # From time
-                                smooth_time_from = st.time_input(
-                                    "From",
-                                    datetime.datetime.strptime(
-                                        "00:00:00", "%H:%M:%S"
-                                    ).time(),
-                                    key="smooth_time_from",
-                                    label_visibility="hidden",
-                                )
+                            # From time
+                            smooth_time_to = st.time_input(
+                                "To",
+                                to_date_start.time(),
+                                key="smooth_time_to",
+                                label_visibility="hidden",
+                            )
 
-                                smooth_range_from = datetime.datetime.combine(
-                                    smooth_date_from, smooth_time_from
-                                )
+                            smooth_range_to = datetime.datetime.combine(
+                                smooth_date_to, smooth_time_to
+                            )
 
-                            with smooth_to_col:
-                                to_date_start = data[
-                                    data[data.columns[0]] >= smooth_range_from
-                                ][data.columns[0]].tolist()[0]
+                        if smooth_range_from > smooth_range_to:
+                            st.error("The selected date range is not valid.")
+                            st.stop()
 
-                                # From date
-                                smooth_date_to = st.date_input(
-                                    "To",
-                                    to_date_start,
-                                    to_date_start,
-                                    data[data.columns[0]].tolist()[-1],
-                                    key="smooth_date_to",
-                                )
+                        # Filter data for given date range
+                        smooth_data = data.copy()[
+                            (data[data.columns[0]] >= smooth_range_from)
+                            & (data[data.columns[0]] <= smooth_range_to)
+                        ]
 
-                                # From time
-                                smooth_time_to = st.time_input(
-                                    "To",
-                                    to_date_start.time(),
-                                    key="smooth_time_to",
-                                    label_visibility="hidden",
-                                )
+                        if smooth_type == "Residuals Filtering" and any(
+                            smooth_data[col_selector_post].diff() <= -4
+                        ):
+                            st.warning("There seems to be a water release event.")
 
-                                smooth_range_to = datetime.datetime.combine(
-                                    smooth_date_to, smooth_time_to
-                                )
+                        if smooth_data.shape[0] <= 1:
+                            st.error("There are not enough data points for smoothing.")
+                            smooth_error = True
 
-                            if smooth_range_from > smooth_range_to:
-                                st.error("The selected date range is not valid.")
-                                st.stop()
-
-                            # Filter data for given date range
-                            smooth_data = data.copy()[
-                                (data[data.columns[0]] >= smooth_range_from)
-                                & (data[data.columns[0]] <= smooth_range_to)
-                            ]
-
-                            if any(smooth_data[col_selector_post].diff() <= -4):
-                                st.warning("There seems to be a water release event.")
-
-                            if smooth_data.shape[0] <= 1:
-                                st.error(
-                                    "There are not enough data points for smoothing."
-                                )
-                                smooth_error = True
-
-                            if not smooth_error:
+                        if not smooth_error:
+                            if smooth_type == "Residuals Filtering":
                                 smoothed, poly_predicted = filter_poly_residuals(
                                     smooth_data[col_selector_post], poly_degree
                                 )
                                 smooth_data[col_selector_post] = smoothed
 
-                            if smooth_preview and not smooth_error:
-                                fig_smooth = go.Figure(
-                                    layout=go.Layout(
-                                        title=f"Smoothed Water Tank Weight for {col_selector_post}",
-                                        height=500,
-                                    )
+                            else:
+                                poly_predicted = get_polyline(
+                                    smooth_data[col_selector_post],
+                                    poly_degree,
+                                    smooth_split_size,
                                 )
+                                smooth_data[col_selector_post] = poly_predicted
 
-                                fig_smooth.add_trace(
-                                    go.Scattergl(
-                                        x=data_plot[data_plot.columns[0]],
-                                        y=data_plot[col_selector_post],
-                                        mode="lines+markers",
-                                        marker=dict(size=2, color="#4574ba"),
-                                        name="original",
-                                        showlegend=True,
-                                    )
+                        if smooth_preview and not smooth_error:
+                            fig_smooth = go.Figure(
+                                layout=go.Layout(
+                                    title=f"Smoothed Water Tank Weight for {col_selector_post}",
+                                    height=500,
                                 )
+                            )
 
-                                fig_smooth.add_trace(
-                                    go.Scattergl(
-                                        x=smooth_data[smooth_data.columns[0]],
-                                        y=smooth_data[col_selector_post],
-                                        mode="lines+markers",
-                                        marker=dict(size=2, color="red"),
-                                        name="smoothed",
-                                        showlegend=True,
-                                    )
+                            fig_smooth.add_trace(
+                                go.Scattergl(
+                                    x=data_plot[data_plot.columns[0]],
+                                    y=data_plot[col_selector_post],
+                                    mode="lines+markers",
+                                    marker=dict(size=2, color="#4574ba"),
+                                    name="original",
+                                    showlegend=True,
                                 )
+                            )
 
+                            fig_smooth.add_trace(
+                                go.Scattergl(
+                                    x=smooth_data[smooth_data.columns[0]],
+                                    y=smooth_data[col_selector_post],
+                                    mode="lines+markers",
+                                    marker=dict(size=2, color="red"),
+                                    name="smoothed",
+                                    showlegend=True,
+                                )
+                            )
+
+                            if smooth_type == "Residuals Filtering":
                                 fig_smooth.add_trace(
                                     go.Scattergl(
                                         x=smooth_data[smooth_data.columns[0]],
@@ -3752,30 +3812,31 @@ try:
                                     )
                                 )
 
-                                st.plotly_chart(
-                                    fig_smooth,
-                                    use_container_width=True,
-                                    **{"config": config},
-                                )
+                            st.plotly_chart(
+                                fig_smooth,
+                                use_container_width=True,
+                                **{"config": config},
+                            )
 
-                            if st.button(
-                                "Smooth", type="primary", disabled=smooth_error
-                            ):
-                                smooth_start_index = data.index[
-                                    data[data.columns[0]] == smooth_range_from
-                                ][0]
-                                smooth_end_index = data.index[
-                                    data[data.columns[0]] == smooth_range_to
-                                ][0]
+                        if st.button("Smooth", type="primary", disabled=smooth_error):
+                            smooth_start_index = data.index[
+                                data[data.columns[0]] == smooth_range_from
+                            ][0]
+                            smooth_end_index = data.index[
+                                data[data.columns[0]] == smooth_range_to
+                            ][0]
 
-                                post_fill(
-                                    smooth_start_index,
-                                    smooth_end_index,
-                                    col_selector_post,
-                                    post_lysi_number,
-                                    smooth_data[col_selector_post].tolist(),
-                                )
+                            post_fill(
+                                smooth_start_index,
+                                smooth_end_index,
+                                col_selector_post,
+                                post_lysi_number,
+                                smooth_data[col_selector_post].tolist(),
+                            )
 
+                    if data_selector == "balance" and re.match(
+                        ".*WAG_D_000.*", col_selector_post
+                    ):
                         # interpolate water tank weights dynamics
                         ################################################################################################
                         water_dynamic_container = st.container()
@@ -3802,6 +3863,7 @@ try:
                                 ) = st.columns(2)
 
                                 with delta_dynamic_from_col:
+                                    from_date_start = data[data.columns[0]].tolist()[0]
                                     # From date
                                     delta_dynamic_date_from = st.date_input(
                                         "From",
