@@ -2652,6 +2652,8 @@ try:
 
             post_lysi_number = lysimeter_selector_post - 1
             data = datasets[post_lysi_number]
+
+            time_step = (10 * 60) if data_selector == "additional" else 60
             st.subheader(f"Lysimeter {lysimeter_selector_post}", divider="gray")
 
             try:
@@ -2984,6 +2986,7 @@ try:
                                 ).time(),
                                 key="remove_time_from",
                                 label_visibility="hidden",
+                                step=time_step,
                             )
 
                             remove_range_from = datetime.datetime.combine(
@@ -3010,6 +3013,7 @@ try:
                                 to_date_start.time(),
                                 key="remove_time_to",
                                 label_visibility="hidden",
+                                step=time_step,
                             )
 
                             remove_range_to = datetime.datetime.combine(
@@ -3037,9 +3041,21 @@ try:
                             & (data[col_selector_post].notna())
                         ].shape[0]
 
+                        time_error_remove = (
+                            remove_time_from.minute % 10 != 0
+                            or remove_time_to.minute % 10 != 0
+                        )
+
+                        if time_error_remove:
+                            st.write(
+                                ":red[The selected time range is not a 10 minute interval.]"
+                            )
+
                         # Apply removement
                         # For each day in the data, the data is separately written
-                        if st.button("Remove", type="primary"):
+                        if st.button(
+                            "Remove", type="primary", disabled=time_error_remove
+                        ):
                             post_remove(
                                 remove_start_index,
                                 remove_end_index,
@@ -3101,6 +3117,7 @@ try:
                                 ).time(),
                                 key="fill_time_from",
                                 label_visibility="hidden",
+                                step=time_step,
                             )
 
                             fill_range_from = datetime.datetime.combine(
@@ -3127,6 +3144,7 @@ try:
                                 to_date_start.time(),
                                 key="fill_time_to",
                                 label_visibility="hidden",
+                                step=time_step,
                             )
 
                             fill_range_to = datetime.datetime.combine(
@@ -3638,8 +3656,23 @@ try:
                             data[data.columns[0]] == fill_range_to
                         ][0]
 
+                        time_error_fill = (
+                            fill_time_from.minute % 10 != 0
+                            or fill_time_to.minute % 10 != 0
+                        )
+
+                        if time_error_fill:
+                            st.write(
+                                ":red[The selected time range is not a 10 minute interval.]"
+                            )
+
                         # Apply fill to the data and save each day individually in file
-                        if st.button("Fill", type="primary", key="fill_post"):
+                        if st.button(
+                            "Fill",
+                            type="primary",
+                            key="fill_post",
+                            disabled=time_error_fill,
+                        ):
                             post_fill(
                                 fill_start_index,
                                 fill_end_index,
@@ -3704,6 +3737,7 @@ try:
                                 ).time(),
                                 key="smooth_time_from",
                                 label_visibility="hidden",
+                                step=time_step,
                             )
 
                             smooth_range_from = datetime.datetime.combine(
@@ -3730,6 +3764,7 @@ try:
                                 to_date_start.time(),
                                 key="smooth_time_to",
                                 label_visibility="hidden",
+                                step=time_step,
                             )
 
                             smooth_range_to = datetime.datetime.combine(
@@ -3818,7 +3853,21 @@ try:
                                 **{"config": config},
                             )
 
-                        if st.button("Smooth", type="primary", disabled=smooth_error):
+                        time_error_smooth = (
+                            smooth_time_from.minute % 10 != 0
+                            or smooth_time_to.minute % 10 != 0
+                        )
+
+                        if time_error_smooth:
+                            st.write(
+                                ":red[The selected time range is not a 10 minute interval.]"
+                            )
+
+                        if st.button(
+                            "Smooth",
+                            type="primary",
+                            disabled=(smooth_error or time_error_smooth),
+                        ):
                             smooth_start_index = data.index[
                                 data[data.columns[0]] == smooth_range_from
                             ][0]
@@ -5261,6 +5310,7 @@ try:
                                 ).time(),
                                 key="post_na_time_from",
                                 label_visibility="hidden",
+                                step=time_step,
                             )
 
                             post_na_range_from = datetime.datetime.combine(
@@ -5285,6 +5335,7 @@ try:
                                 to_date_start.time(),
                                 key="post_na_time_to",
                                 label_visibility="hidden",
+                                step=time_step,
                             )
 
                             post_na_range_to = datetime.datetime.combine(
@@ -5320,6 +5371,17 @@ try:
                                 & (data[col_selector_post].isna())
                             ].shape[0]
 
+                        # Check whether time range from and to is a 10 minute interval
+                        time_error_interpolate = (
+                            post_na_range_from.minute % 10 != 0
+                            or post_na_range_to.minute % 10 != 0
+                        )
+
+                        if time_error_interpolate:
+                            st.write(
+                                ":red[The selected time range is not a 10 minute interval.]"
+                            )
+
                         # Apply removement
                         # For each day in the data, the data is separately written
                         if st.button(
@@ -5327,6 +5389,7 @@ try:
                             type="primary",
                             disabled=(
                                 data.index[data[col_selector_post].isna()].shape[0] == 0
+                                or time_error_interpolate
                             ),
                         ):
                             if (
