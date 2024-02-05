@@ -2786,11 +2786,16 @@ try:
 
                         with thresh_base_col1:
                             base_type = st.selectbox(
-                                "Select base type", ["single value", "mean"]
+                                "Select base type",
+                                ["single value", "mean", "rolling mean"],
                             )
                         with thresh_base_col2:
                             if base_type == "single value":
                                 thresh_base = st.number_input("Select basis", step=1.0)
+                            elif base_type == "rolling mean":
+                                thresh_base = st.number_input(
+                                    "Select window size", step=1, value=50, min_value=3
+                                )
                             else:
                                 thresh_base = data[col_selector_post].mean()
 
@@ -2808,52 +2813,146 @@ try:
 
                         data_thresh = data.copy()
 
+                        if base_type == "rolling mean":
+                            data_thresh["rolling_mean"] = (
+                                data[col_selector_post]
+                                .rolling(window=thresh_base)
+                                .mean()
+                            ).fillna(method="bfill")
+                            initial_rolling_mean = (
+                                data_thresh["rolling_mean"].dropna().iloc[0]
+                            )
+                            data_thresh["rolling_mean"].loc[
+                                : thresh_base - 2
+                            ] = initial_rolling_mean
+
                         # If threshold should be mirrored at y-axis, cutt off threshold of 10 is also -10 relative to base...
                         if show_treshold_mirror_preview:
-                            lower = thresh_base - abs(cut_threshold)
-                            upper = thresh_base + abs(cut_threshold)
-                            data_thresh_plot = data[
-                                data[col_selector_post].between(lower, upper)
-                            ]
-                            # Set rows where condition was met to NA
-                            data_thresh.loc[:, col_selector_post] = np.where(
-                                data[col_selector_post].between(lower, upper),
-                                data_thresh[col_selector_post],
-                                np.nan,
-                            )
-                            st.write(
-                                f":red[Values between {round(lower,2)} and {round(upper,2)}]"
-                            )
+                            if base_type == "rolling mean":
+                                data_thresh["rolling_mean_lower"] = data_thresh[
+                                    "rolling_mean"
+                                ] - abs(cut_threshold)
+                                data_thresh["rolling_mean_upper"] = data_thresh[
+                                    "rolling_mean"
+                                ] + abs(cut_threshold)
+                                data_thresh_plot = data_thresh[
+                                    (
+                                        data_thresh[col_selector_post]
+                                        >= data_thresh["rolling_mean_lower"]
+                                    )
+                                    & (
+                                        data_thresh[col_selector_post]
+                                        <= data_thresh["rolling_mean_upper"]
+                                    )
+                                ]
+                                # Set rows where condition was met to NA
+                                data_thresh.loc[:, col_selector_post] = np.where(
+                                    (
+                                        data_thresh[col_selector_post]
+                                        >= data_thresh["rolling_mean_lower"]
+                                    )
+                                    & (
+                                        data_thresh[col_selector_post]
+                                        <= data_thresh["rolling_mean_upper"]
+                                    ),
+                                    data_thresh[col_selector_post],
+                                    np.nan,
+                                )
+                                st.write(
+                                    f":red[Values between rolling mean from {round(data_thresh['rolling_mean'].min(),2)} to {round(data_thresh['rolling_mean'].max(),2)} +/- {round(abs(cut_threshold),2)}]"
+                                )
+                            else:
+                                lower = thresh_base - abs(cut_threshold)
+                                upper = thresh_base + abs(cut_threshold)
+                                data_thresh_plot = data[
+                                    data[col_selector_post].between(lower, upper)
+                                ]
+                                # Set rows where condition was met to NA
+                                data_thresh.loc[:, col_selector_post] = np.where(
+                                    data[col_selector_post].between(lower, upper),
+                                    data_thresh[col_selector_post],
+                                    np.nan,
+                                )
+                                st.write(
+                                    f":red[Values between {round(lower,2)} and {round(upper,2)}]"
+                                )
                         else:
                             # Check whether the threshold is negative or positive and filter rows accordingly
                             if cut_threshold < 0:
-                                data_thresh_plot = data[
-                                    data[col_selector_post]
-                                    >= (thresh_base + cut_threshold)
-                                ]
-                                data_thresh.loc[:, col_selector_post] = np.where(
-                                    data[col_selector_post]
-                                    >= (thresh_base + cut_threshold),
-                                    data_thresh[col_selector_post],
-                                    np.nan,
-                                )
-                                st.write(
-                                    f":red[Values above {round(thresh_base + cut_threshold,2)}]"
-                                )
+                                if base_type == "rolling mean":
+                                    data_thresh["rolling_mean_lower"] = data_thresh[
+                                        "rolling_mean"
+                                    ] - abs(cut_threshold)
+                                    data_thresh_plot = data_thresh[
+                                        (
+                                            data_thresh[col_selector_post]
+                                            >= data_thresh["rolling_mean_lower"]
+                                        )
+                                    ]
+                                    # Set rows where condition was met to NA
+                                    data_thresh.loc[:, col_selector_post] = np.where(
+                                        (
+                                            data_thresh[col_selector_post]
+                                            >= data_thresh["rolling_mean_lower"]
+                                        ),
+                                        data_thresh[col_selector_post],
+                                        np.nan,
+                                    )
+                                    st.write(
+                                        f":red[Values below rolling mean from {round(data_thresh['rolling_mean'].min(),2)} to {round(data_thresh['rolling_mean'].max(),2)} - {round(abs(cut_threshold),2)}]"
+                                    )
+                                else:
+                                    data_thresh_plot = data[
+                                        data[col_selector_post]
+                                        >= (thresh_base + cut_threshold)
+                                    ]
+                                    data_thresh.loc[:, col_selector_post] = np.where(
+                                        data[col_selector_post]
+                                        >= (thresh_base + cut_threshold),
+                                        data_thresh[col_selector_post],
+                                        np.nan,
+                                    )
+                                    st.write(
+                                        f":red[Values above {round(thresh_base + cut_threshold,2)}]"
+                                    )
+                                    st.dataframe(data_thresh_plot)
                             else:
-                                data_thresh_plot = data[
-                                    data[col_selector_post]
-                                    <= (thresh_base + cut_threshold)
-                                ]
-                                data_thresh.loc[:, col_selector_post] = np.where(
-                                    data[col_selector_post]
-                                    <= (thresh_base + cut_threshold),
-                                    data_thresh[col_selector_post],
-                                    np.nan,
-                                )
-                                st.write(
-                                    f":red[Values below {round(thresh_base + cut_threshold,2)}]"
-                                )
+                                if base_type == "rolling mean":
+                                    data_thresh["rolling_mean_upper"] = data_thresh[
+                                        "rolling_mean"
+                                    ] + abs(cut_threshold)
+                                    data_thresh_plot = data_thresh[
+                                        (
+                                            data_thresh[col_selector_post]
+                                            <= data_thresh["rolling_mean_upper"]
+                                        )
+                                    ]
+                                    # Set rows where condition was met to NA
+                                    data_thresh.loc[:, col_selector_post] = np.where(
+                                        (
+                                            data_thresh[col_selector_post]
+                                            <= data_thresh["rolling_mean_upper"]
+                                        ),
+                                        data_thresh[col_selector_post],
+                                        np.nan,
+                                    )
+                                    st.write(
+                                        f":red[Values above rolling mean from {round(data_thresh['rolling_mean'].min(),2)} to {round(data_thresh['rolling_mean'].max(),2)} + {round(abs(cut_threshold),2)}]"
+                                    )
+                                else:
+                                    data_thresh_plot = data[
+                                        data[col_selector_post]
+                                        <= (thresh_base + cut_threshold)
+                                    ]
+                                    data_thresh.loc[:, col_selector_post] = np.where(
+                                        data[col_selector_post]
+                                        <= (thresh_base + cut_threshold),
+                                        data_thresh[col_selector_post],
+                                        np.nan,
+                                    )
+                                    st.write(
+                                        f":red[Values below {round(thresh_base + cut_threshold,2)}]"
+                                    )
 
                         # Find row indexes where the data has been set to NA due to the cut off threshold
                         thresh_start_index = data.index[
