@@ -135,133 +135,136 @@ def filter_poly_residuals(series, degree):
 
 
 def finish_final(datasets, src_suffix, dest_suffix):
-    all_data = []
-    # Loop over data from different lysimeter numbers
-    for index, dataset in enumerate(datasets):
-        unique_dates = [
-            date.strftime("%Y_%m_%d")
-            for date in pd.to_datetime(dataset[dataset.columns[0]])
-            .dt.date.unique()
-            .tolist()
-        ]
-        start_date = unique_dates[0]
-        end_date = unique_dates[-1]
-
-        pathlib.Path(
-            st.session_state["read_path"].replace(
-                f"{data_selector}_post",
-                f"{data_selector}_finished",
-            )
-        ).mkdir(parents=True, exist_ok=True)
-        os.path.join(
-            st.session_state["read_path"].replace(
-                f"{data_selector}_post",
-                f"{data_selector}_finished",
-            ),
-            f"{index+1}_{start_date}_{end_date}.csv",
-        )
-        # List existing files in the destination folder
-        existing_files = os.listdir(
-            st.session_state["read_path"].replace(
-                f"{data_selector}_post",
-                f"{data_selector}_finished",
-            )
-        )
-        # Check for each date of the lysimeter data if there is another finished file that includes this date
-        # If yes an error will be thrown
-        already_existing = False
-        for file in existing_files:
-            if not file == ".DS_Store":
-                file_search = re.search(
-                    "(\\d{4}_\\d{2}_\\d{2})_(\\d{4}_\\d{2}_\\d{2}).*",
-                    file,
-                )
-                start_date_existing = datetime.datetime.strptime(
-                    file_search.group(1), "%Y_%m_%d"
-                )
-                end_date_existing = datetime.datetime.strptime(
-                    file_search.group(2), "%Y_%m_%d"
-                )
-
-                start_date_saving = datetime.datetime.strptime(start_date, "%Y_%m_%d")
-                end_date_saving = datetime.datetime.strptime(end_date, "%Y_%m_%d")
-
-                if (
-                    (start_date_saving >= start_date_existing)
-                    and (start_date_saving <= end_date_existing)
-                ) or (
-                    (end_date_saving >= start_date_existing)
-                    and (end_date_saving <= end_date_existing)
-                ):
-                    already_existing = True
-
-        # If there is no conflict with existing dates the file is appended to a list
-        if not already_existing:
-            # Remove the flag columns
-            dataset_truncated_cols = [
-                col for col in dataset.columns if not re.match(".*fill.*", col)
+    with st.spinner(text="Saving data..."):
+        all_data = []
+        # Loop over data from different lysimeter numbers
+        for index, dataset in enumerate(datasets):
+            unique_dates = [
+                date.strftime("%Y_%m_%d")
+                for date in pd.to_datetime(dataset[dataset.columns[0]])
+                .dt.date.unique()
+                .tolist()
             ]
-            lysimeter_data = dataset[dataset_truncated_cols]
-            lysimeter_data.set_index(lysimeter_data.columns[0], inplace=True)
-            all_data.append(lysimeter_data)
-    if already_existing:
-        st.error(
-            "The loaded date range for this lysimeter overlaps with already saved data!"
-        )
-    else:
-        # Data is merged together and written
-        export_data = pd.concat(all_data, axis=1)
-        export_data.reset_index(inplace=True)
-        export_data.to_csv(
+            start_date = unique_dates[0]
+            end_date = unique_dates[-1]
+
+            pathlib.Path(
+                st.session_state["read_path"].replace(
+                    f"{data_selector}_{src_suffix}",
+                    f"{data_selector}_{dest_suffix}",
+                )
+            ).mkdir(parents=True, exist_ok=True)
             os.path.join(
                 st.session_state["read_path"].replace(
-                    f"{data_selector}_post",
-                    f"{data_selector}_finished",
+                    f"{data_selector}_{src_suffix}",
+                    f"{data_selector}_{dest_suffix}",
                 ),
-                f"{start_date}_{end_date}.csv",
-            ),
-            index=False,
-        )
+                f"{index+1}_{start_date}_{end_date}.csv",
+            )
+            # List existing files in the destination folder
+            existing_files = os.listdir(
+                st.session_state["read_path"].replace(
+                    f"{data_selector}_{src_suffix}",
+                    f"{data_selector}_{dest_suffix}",
+                )
+            )
+            # Check for each date of the lysimeter data if there is another finished file that includes this date
+            # If yes an error will be thrown
+            already_existing = False
+            for file in existing_files:
+                if not file == ".DS_Store":
+                    file_search = re.search(
+                        "(\\d{4}_\\d{2}_\\d{2})_(\\d{4}_\\d{2}_\\d{2}).*",
+                        file,
+                    )
+                    start_date_existing = datetime.datetime.strptime(
+                        file_search.group(1), "%Y_%m_%d"
+                    )
+                    end_date_existing = datetime.datetime.strptime(
+                        file_search.group(2), "%Y_%m_%d"
+                    )
 
-        with InfluxDBClient(
-            url=os.environ.get("URL"),
-            token=os.environ.get("TOKEN"),
-            org=os.environ.get("ORG"),
-            debug=False,
-        ) as client:
-            with client.write_api(write_options=SYNCHRONOUS) as write_api:
-                try:
-                    for dataset in datasets:
-                        cols_truncated = [
-                            col
-                            for col in dataset.columns
-                            if not re.match(".*fill.*", col)
-                        ]
-                        dataset_local = dataset[cols_truncated]
-                        dataset_local["location"] = location_selector
-                        dataset_local.set_index(dataset_local.columns[0], inplace=True)
-                        dataset_local["component"] = data_selector
-                        write_api.write(
-                            os.environ.get("BUCKET"),
-                            "kit",
-                            # Since influxdb adds +2 hours internal (is always UTC)
-                            record=dataset_local.tz_localize(
-                                "UTC"
-                            ),  # .tz_convert("UTC"),
-                            data_frame_measurement_name="processed",
-                            data_frame_tag_columns=[
-                                "location",
-                                "component",
-                            ],
-                        )
-                        st.session_state["influxdb_error"] = False
-                except Exception as e:
-                    print("influxdb error:")
-                    print(e)
-                    st.session_state["influxdb_error"] = True
+                    start_date_saving = datetime.datetime.strptime(
+                        start_date, "%Y_%m_%d"
+                    )
+                    end_date_saving = datetime.datetime.strptime(end_date, "%Y_%m_%d")
 
-        reset_data()
-        st.rerun()
+                    if (
+                        (start_date_saving >= start_date_existing)
+                        and (start_date_saving <= end_date_existing)
+                    ) or (
+                        (end_date_saving >= start_date_existing)
+                        and (end_date_saving <= end_date_existing)
+                    ):
+                        already_existing = True
+
+            # If there is no conflict with existing dates the file is appended to a list
+            if not already_existing:
+                # Remove the flag columns
+                dataset_truncated_cols = [
+                    col for col in dataset.columns if not re.match(".*fill.*", col)
+                ]
+                lysimeter_data = dataset[dataset_truncated_cols]
+                lysimeter_data.set_index(lysimeter_data.columns[0], inplace=True)
+                all_data.append(lysimeter_data)
+        if already_existing:
+            st.error(
+                "The loaded date range for this lysimeter overlaps with already saved data!"
+            )
+        else:
+            # Data is merged together and written
+            export_data = pd.concat(all_data, axis=1)
+            export_data.reset_index(inplace=True)
+            export_data.to_csv(
+                os.path.join(
+                    st.session_state["read_path"].replace(
+                        f"{data_selector}_{src_suffix}",
+                        f"{data_selector}_{dest_suffix}",
+                    ),
+                    f"{start_date}_{end_date}.csv",
+                ),
+                index=False,
+            )
+
+            # with InfluxDBClient(
+            #     url=os.environ.get("URL"),
+            #     token=os.environ.get("TOKEN"),
+            #     org=os.environ.get("ORG"),
+            #     debug=False,
+            # ) as client:
+            #     with client.write_api(write_options=SYNCHRONOUS) as write_api:
+            #         try:
+            #             for dataset in datasets:
+            #                 cols_truncated = [
+            #                     col
+            #                     for col in dataset.columns
+            #                     if not re.match(".*fill.*", col)
+            #                 ]
+            #                 dataset_local = dataset[cols_truncated]
+            #                 dataset_local["location"] = location_selector
+            #                 dataset_local.set_index(dataset_local.columns[0], inplace=True)
+            #                 dataset_local["component"] = data_selector
+            #                 write_api.write(
+            #                     os.environ.get("BUCKET"),
+            #                     "kit",
+            #                     # Since influxdb adds +2 hours internal (is always UTC)
+            #                     record=dataset_local.tz_localize(
+            #                         "UTC"
+            #                     ),  # .tz_convert("UTC"),
+            #                     data_frame_measurement_name="processed",
+            #                     data_frame_tag_columns=[
+            #                         "location",
+            #                         "component",
+            #                     ],
+            #                 )
+            #                 st.session_state["influxdb_error"] = False
+            #         except Exception as e:
+            #             print("influxdb error:")
+            #             print(e)
+            #             st.session_state["influxdb_error"] = True
+
+            reset_data()
+            st.rerun()
 
 
 def finish_awat(datasets):
@@ -1550,10 +1553,6 @@ try:
                 st.info(
                     "Clicking the button passes all loaded lysimeter data to the next workflow step."
                 )
-                if data_selector == "balance":
-                    st.warning(
-                        f"The AWAT-Filter will be applied to the data in the next step. In order for this to work, a buffer day before and after the days of interest is needed that will be cut off afterwards: :red[**{datasets[0].iloc[0,0].strftime('%Y-%m-%d')}**] and :red[**{datasets[0].iloc[datasets[0].shape[0]-1,0].strftime('%Y-%m-%d')}**] will be removed."
-                    )
                 confirm = st.checkbox("I understand")
                 if st.button("Finish File", type="primary", disabled=(not confirm)):
                     finish_stage(datasets, data_selector, "filled", "post")
@@ -2632,9 +2631,19 @@ try:
             #
             with lysimeter_finish_col_post:
                 # When finishing a file (=postprocessing completed) the file is written as one big file to new folder
-                st.info(
-                    "Clicking the button passes all loaded lysimeter data to the next workflow step."
-                )
+
+                if (
+                    data_selector == "balance"
+                    and postprocess_timing_selector == "pre AWAT"
+                ):
+                    st.warning(
+                        f"The AWAT-Filter will be applied to the data in the next step. In order for this to work, a buffer day before and after the days of interest is needed that will be cut off afterwards: :red[**{datasets[0].iloc[0,0].strftime('%Y-%m-%d')}**] and :red[**{datasets[0].iloc[datasets[0].shape[0]-1,0].strftime('%Y-%m-%d')}**] will be removed."
+                    )
+                else:
+                    st.info(
+                        f"Clicking the button writes all the data to a file in the '{data_selector}_finished' folder."
+                    )
+
                 confirm_post = st.checkbox("I understand")
                 if st.button(
                     "Finish File",
@@ -2643,9 +2652,12 @@ try:
                     key="finish_post",
                 ):
                     if data_selector == "additional":
-                        pass
+                        finish_final(datasets, "post", "finished")
                     else:
-                        finish_awat(datasets)
+                        if postprocess_timing_selector == "pre AWAT":
+                            finish_awat(datasets)
+                        else:
+                            finish_final(datasets, "awat", "finished")
 
             # Display lysimeter plots for postprocessing
             ################################################################################################
@@ -2915,7 +2927,6 @@ try:
                                     st.write(
                                         f":red[Values above {round(thresh_base + cut_threshold,2)}]"
                                     )
-                                    st.dataframe(data_thresh_plot)
                             else:
                                 if base_type == "rolling mean":
                                     data_thresh["rolling_mean_upper"] = data_thresh[
