@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*-coding:utf-8 -*-
 """
-@File     :resolve_errors.py
+@File     :resolve_pipe_errors.py
 @Time     :2023/11/15 14:40:16
 @Author   :Jasper Schalla
 @Contact  :jasper.schalla@web.de
@@ -31,5 +31,7 @@ for file, location in errors:
     file_src_path = os.path.join(src_path, "watch", location, file)
     file_dest_path = os.path.join(src_path, "original", file)
     shutil.copy(file_src_path, file_dest_path)
-    process = subprocess.Popen(f"bash resolve_errors.sh {location} {file}", shell=True)
+    process = subprocess.Popen(
+        f"bash resolve_pipe_errors.sh {location} {file}", shell=True
+    )
     process.wait()

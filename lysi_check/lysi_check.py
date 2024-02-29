@@ -3154,7 +3154,7 @@ try:
                         time_error_remove = (
                             remove_time_from.minute % 10 != 0
                             or remove_time_to.minute % 10 != 0
-                        )
+                        ) and data_selector == "additional"
 
                         if time_error_remove:
                             st.write(
@@ -3769,7 +3769,7 @@ try:
                         time_error_fill = (
                             fill_time_from.minute % 10 != 0
                             or fill_time_to.minute % 10 != 0
-                        )
+                        ) and data_selector == "additional"
 
                         if time_error_fill:
                             st.write(
@@ -3966,7 +3966,7 @@ try:
                         time_error_smooth = (
                             smooth_time_from.minute % 10 != 0
                             or smooth_time_to.minute % 10 != 0
-                        )
+                        ) and data_selector == "additional"
 
                         if time_error_smooth:
                             st.write(
@@ -5485,7 +5485,7 @@ try:
                         time_error_interpolate = (
                             post_na_range_from.minute % 10 != 0
                             or post_na_range_to.minute % 10 != 0
-                        )
+                        ) and data_selector == "additional"
 
                         if time_error_interpolate:
                             st.write(

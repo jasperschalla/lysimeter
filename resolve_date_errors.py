@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+# -*-coding:utf-8 -*-
+"""
+@File     :resolve_date_errors.py
+@Time     :2024/02/08 10:46:47
+@Author   :Jasper Schalla
+@Contact  :jasper.schalla@web.de
+"""
+
 import os
 import re
 import logging
@@ -60,12 +69,10 @@ for location in locations:
         )
         logger.info("------------------------------------------------------")
 
-        new_filename = f"000_{filename}T000.xlsx"
+        new_filename = f"999_{filename}T999.xlsx"
         os.rename(f"./excel/{location}/{file}", f"./excel/{location}/{new_filename}")
         process = subprocess.Popen(
-            [
-                f"python postprocess.py {f'./excel/{location}/{new_filename}'} {location}"
-            ],
+            [f"python postprocess.py './excel/{location}/{new_filename}' {location}"],
             shell=True,
         )
         process.wait()
