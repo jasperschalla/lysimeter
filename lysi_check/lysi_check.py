@@ -1393,9 +1393,9 @@ def read_data(path, relevant_files, type_selector):
                     cumsum_weights = correct_water_release(water_weight)
 
                     # Add cumulated sum of water tank weight as new column
-                    merged_data.loc[
-                        :, f"L_{lysimeter_number+1}_WAG_D_000_cumsum"
-                    ] = cumsum_weights
+                    merged_data.loc[:, f"L_{lysimeter_number+1}_WAG_D_000_cumsum"] = (
+                        cumsum_weights
+                    )
                     # Create empty flag columns for gap check so that no error is thrown
                     merged_data.loc[
                         :, f"fill_l_{lysimeter_number+1}_wag_d_000_cumsum_code"
@@ -3513,9 +3513,9 @@ try:
                                             )
 
                                             current_col_original_values[0] = init_value
-                                            current_col_original_values[
-                                                1:
-                                            ] = partner_col_replace_values[1:]
+                                            current_col_original_values[1:] = (
+                                                partner_col_replace_values[1:]
+                                            )
 
                                             fill_values_post = np.cumsum(
                                                 current_col_original_values
@@ -3535,9 +3535,9 @@ try:
                                         )
 
                                         current_col_original_values[0] = init_value
-                                        current_col_original_values[
-                                            1:
-                                        ] = partner_col_replace_values[1:]
+                                        current_col_original_values[1:] = (
+                                            partner_col_replace_values[1:]
+                                        )
 
                                         fill_values_post_temp = np.cumsum(
                                             current_col_original_values
@@ -3622,9 +3622,9 @@ try:
                                         )
 
                                         current_col_original_values[0] = init_value
-                                        current_col_original_values[
-                                            1:
-                                        ] = partner_col_replace_values[1:]
+                                        current_col_original_values[1:] = (
+                                            partner_col_replace_values[1:]
+                                        )
 
                                         fill_values_post = np.cumsum(
                                             current_col_original_values
@@ -3641,9 +3641,9 @@ try:
                                     )
 
                                     current_col_original_values[0] = init_value
-                                    current_col_original_values[
-                                        1:
-                                    ] = partner_col_replace_values[1:]
+                                    current_col_original_values[1:] = (
+                                        partner_col_replace_values[1:]
+                                    )
 
                                     fill_values_post = np.cumsum(
                                         current_col_original_values
@@ -4886,9 +4886,9 @@ try:
                                                 ).tolist()
 
                                                 # Add timedelta and timedelta groups to dataframe
-                                                albedo_fills.loc[
-                                                    :, "timedelta"
-                                                ] = time_diff
+                                                albedo_fills.loc[:, "timedelta"] = (
+                                                    time_diff
+                                                )
                                                 albedo_fills.loc[
                                                     :, "timedelta_groups"
                                                 ] = np.where(
@@ -5122,9 +5122,9 @@ try:
                                                 * pluvio_df["precipitation"]
                                             )
 
-                                            pluvio_df[
-                                                "precipitation_filled"
-                                            ] = pluvio_fill_values
+                                            pluvio_df["precipitation_filled"] = (
+                                                pluvio_fill_values
+                                            )
                                         else:
                                             pluvio_df["precipitation_filled"] = [
                                                 np.nan

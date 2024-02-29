@@ -2,8 +2,8 @@ FROM python:3.11
 
 WORKDIR /usr/app/src
 
-RUN addgroup --gid 917 imk_ifu_tereno
-RUN adduser --disabled-password --gecos '' --uid 15223 --gid 917 s_lysipipe
+#RUN addgroup --gid 917 imk_ifu_tereno
+#RUN adduser --disabled-password --gecos '' --uid 15223 --gid 917 s_lysipipe
 
 COPY requirements.txt requirements.txt
 
@@ -21,6 +21,6 @@ COPY resolve_date_errors.py ./
 
 RUN mkdir ./original ./dumped ./dumped_head ./raw
 
-USER s_lysipipe
+#USER s_lysipipe
 
 CMD ["python","./watcher.py"]

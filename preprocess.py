@@ -382,17 +382,33 @@ with InfluxDBClient(
 
             # Merge the flagged values for H and I schedule in a dataframe
             # Sometimes there are values with too short distance between each other (only a few seconds) => remove duplicate flags
-            merged_flags = (
-                pd.concat([h_flag_sheet, i_flag_sheet])
-                .reset_index(names="Timestamp")
-                .drop_duplicates()
-                .set_index("Timestamp")
+            # merged_flags = (
+            #     pd.concat([h_flag_sheet, i_flag_sheet])
+            #     .reset_index(names="Timestamp")
+            #     .drop_duplicates()
+            #     .set_index("Timestamp")
+            # )
+            # pivoted_flags = pd.pivot(
+            #     merged_flags, values="reason", columns=["parameter"]
+            # )
+
+            pivoted_flags_h = pd.pivot(
+                h_flag_sheet.reset_index(names="Timestamp").set_index("Timestamp"),
+                values="reason",
+                columns=["parameter"],
             )
-            pivoted_flags = pd.pivot(
-                merged_flags, values="reason", columns=["parameter"]
+
+            pivoted_flags_h["schedule"] = "H"
+            pivoted_flags_h["location"] = location
+
+            pivoted_flags_i = pd.pivot(
+                i_flag_sheet.reset_index(names="Timestamp").set_index("Timestamp"),
+                values="reason",
+                columns=["parameter"],
             )
-            pivoted_flags["schedule"] = "H"  # TODO: Fix this
-            pivoted_flags.loc[:, "location"] = location
+
+            pivoted_flags_i["schedule"] = "I"
+            pivoted_flags_i["location"] = location
 
             available_dates_g = (
                 g_csv.reset_index()["Timestamp"]
@@ -474,9 +490,14 @@ with InfluxDBClient(
                     how="left",
                 ).set_index("Timestamp")
 
-                pivoted_flags_date = pivoted_flags[
-                    (pivoted_flags.index >= start_date_min)
-                    & (pivoted_flags.index <= end_date_min)
+                pivoted_flags_date_h = pivoted_flags_h[
+                    (pivoted_flags_h.index >= start_date_min)
+                    & (pivoted_flags_h.index <= end_date_min)
+                ]
+
+                pivoted_flags_date_i = pivoted_flags_i[
+                    (pivoted_flags_i.index >= start_date_min)
+                    & (pivoted_flags_i.index <= end_date_min)
                 ]
 
                 # If all schedules are empty, rais ValueError (exact error does not matter)
@@ -496,7 +517,8 @@ with InfluxDBClient(
                         h_csv_date.drop(["location"], axis=1).to_excel(
                             writer, sheet_name="H"
                         )
-                        pivoted_flags_date.to_excel(writer, sheet_name="Flags")
+                        pivoted_flags_date_h.to_excel(writer, sheet_name="Flags_H")
+                        pivoted_flags_date_i.to_excel(writer, sheet_name="Flags_I")
                         logger.info(
                             f"file '{filename}.xlsx' was created for location={location}"
                         )
@@ -547,19 +569,43 @@ with InfluxDBClient(
                         f"file '{filename}.csv's G schedule has been successfully written to influxdb for location={location}"
                     )
 
-                    write_api.write(
-                        os.environ.get("BUCKET"),
-                        os.environ.get("ORG"),
-                        # Since influxdb adds +2 hours internal (is always UTC)
-                        record=pivoted_flags_date.tz_localize(
-                            "UTC"
-                        ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
-                        data_frame_measurement_name="flags",
-                        data_frame_tag_columns=["location", "schedule"],
-                    )
-                    logger.info(
-                        f"file '{filename}.csv's Flags schedule has been successfully written to influxdb for location={location}"
-                    )
+                    if pivoted_flags_date_i.shape[0] > 0:
+                        write_api.write(
+                            os.environ.get("BUCKET"),
+                            os.environ.get("ORG"),
+                            # Since influxdb adds +2 hours internal (is always UTC)
+                            record=pivoted_flags_date_i.tz_localize(
+                                "UTC"
+                            ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
+                            data_frame_measurement_name="flags",
+                            data_frame_tag_columns=["location", "schedule"],
+                        )
+                        logger.info(
+                            f"file '{filename}.csv's I Flags schedule has been successfully written to influxdb for location={location}"
+                        )
+                    else:
+                        logger.info(
+                            f"file '{filename}.csv's I Flags schedule is empty and has not been written to influxdb for location={location}"
+                        )
+
+                    if pivoted_flags_i.shape[0] > 0:
+                        write_api.write(
+                            os.environ.get("BUCKET"),
+                            os.environ.get("ORG"),
+                            # Since influxdb adds +2 hours internal (is always UTC)
+                            record=pivoted_flags_date_h.tz_localize(
+                                "UTC"
+                            ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
+                            data_frame_measurement_name="flags",
+                            data_frame_tag_columns=["location", "schedule"],
+                        )
+                        logger.info(
+                            f"file '{filename}.csv's H Flags schedule has been successfully written to influxdb for location={location}"
+                        )
+                    else:
+                        logger.info(
+                            f"file '{filename}.csv's H Flags schedule is empty and has not been written to influxdb for location={location}"
+                        )
 
                 # Remove name_date from available dates
                 available_dates_g.remove(name_date.strftime("%Y-%m-%d"))
@@ -642,10 +688,15 @@ with InfluxDBClient(
                             on="Timestamp",
                             how="left",
                         ).set_index("Timestamp")
-                        pivoted_flags_date = pivoted_flags[
-                            (pivoted_flags.index >= start_date_min)
-                            & (pivoted_flags.index <= end_date_min)
+                        pivoted_flags_date_h = pivoted_flags_h[
+                            (pivoted_flags_h.index >= start_date_min)
+                            & (pivoted_flags_h.index <= end_date_min)
                         ]
+                        pivoted_flags_date_i = pivoted_flags_i[
+                            (pivoted_flags_i.index >= start_date_min)
+                            & (pivoted_flags_i.index <= end_date_min)
+                        ]
+
                         # Check if not all columns are NA from g_csv_date, h_csv_date, i_csv_date and pivoted_flags_date
                         if (
                             not g_csv_date.drop(["location"], axis=1)
@@ -660,7 +711,8 @@ with InfluxDBClient(
                             .dropna(how="all")
                             .shape[0]
                             == 0
-                            or not pivoted_flags_date.dropna(how="all").shape[0] == 0
+                            or not pivoted_flags_date_h.dropna(how="all").shape[0] == 0
+                            or not pivoted_flags_date_i.dropna(how="all").shape[0] == 0
                         ):
                             error_date_name = (
                                 start_date_min + datetime.timedelta(days=1)
@@ -678,7 +730,12 @@ with InfluxDBClient(
                                 h_csv_date.drop(["location"], axis=1).to_excel(
                                     writer, sheet_name="H"
                                 )
-                                pivoted_flags_date.to_excel(writer, sheet_name="Flags")
+                                pivoted_flags_date_h.to_excel(
+                                    writer, sheet_name="Flags_H"
+                                )
+                                pivoted_flags_date_i.to_excel(
+                                    writer, sheet_name="Flags_I"
+                                )
 
                             g_csv["schedule"] = "G"
                             i_csv["schedule"] = "I"
@@ -730,27 +787,53 @@ with InfluxDBClient(
                                 f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's G schedule has been successfully written to influxdb for location={location}"
                             )
 
-                            write_api.write(
-                                os.environ.get("BUCKET"),
-                                org=os.environ.get("ORG"),
-                                # Since influxdb adds +2 hours internal (is always UTC)
-                                record=pivoted_flags_date.tz_localize(
-                                    "UTC"
-                                ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
-                                data_frame_measurement_name="flags",
-                                data_frame_tag_columns=["location", "schedule"],
-                            )
+                            if pivoted_flags_date_i.shape[0] > 0:
+                                write_api.write(
+                                    os.environ.get("BUCKET"),
+                                    org=os.environ.get("ORG"),
+                                    # Since influxdb adds +2 hours internal (is always UTC)
+                                    record=pivoted_flags_date_i.tz_localize(
+                                        "UTC"
+                                    ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
+                                    data_frame_measurement_name="flags",
+                                    data_frame_tag_columns=["location", "schedule"],
+                                )
 
-                            logger.info(
-                                f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's Flags schedule has been successfully written to influxdb for location={location}"
-                            )
+                                logger.info(
+                                    f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's I Flags schedule has been successfully written to influxdb for location={location}"
+                                )
+                            else:
+                                logger.info(
+                                    f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's I Flags schedule is empty and has not been written to influxdb for location={location}"
+                                )
+
+                            if pivoted_flags_date_h.shape[0] > 0:
+                                write_api.write(
+                                    os.environ.get("BUCKET"),
+                                    org=os.environ.get("ORG"),
+                                    # Since influxdb adds +2 hours internal (is always UTC)
+                                    record=pivoted_flags_date_h.tz_localize(
+                                        "UTC"
+                                    ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
+                                    data_frame_measurement_name="flags",
+                                    data_frame_tag_columns=["location", "schedule"],
+                                )
+
+                                logger.info(
+                                    f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's H Flags schedule has been successfully written to influxdb for location={location}"
+                                )
+                            else:
+                                logger.info(
+                                    f"file 'error_{error_date_name}T000.xlsx' from '{filename}.csv's H Flags schedule is empty and has not been written to influxdb for location={location}"
+                                )
 
             else:
                 with pd.ExcelWriter(f"./excel/{location}/{filename}.xlsx") as writer:
                     g_csv.drop(["location"], axis=1).to_excel(writer, sheet_name="G")
                     i_csv.drop(["location"], axis=1).to_excel(writer, sheet_name="I")
                     h_csv.drop(["location"], axis=1).to_excel(writer, sheet_name="H")
-                    pivoted_flags.to_excel(writer, sheet_name="Flags")
+                    pivoted_flags_h.to_excel(writer, sheet_name="Flags_H")
+                    pivoted_flags_i.to_excel(writer, sheet_name="Flags_I")
                 logger.info(
                     f"file '{filename}.xlsx' was created for location={location}"
                 )
@@ -803,20 +886,45 @@ with InfluxDBClient(
                     f"file '{filename}.csv's G schedule has been successfully written to influxdb for location={location}"
                 )
 
-                write_api.write(
-                    os.environ.get("BUCKET"),
-                    os.environ.get("ORG"),
-                    # Since influxdb adds +2 hours internal (is always UTC)
-                    record=pivoted_flags.tz_localize(
-                        "UTC"
-                    ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
-                    data_frame_measurement_name="flags",
-                    data_frame_tag_columns=["location", "schedule"],
-                )
+                if pivoted_flags_i.shape[0] > 0:
+                    write_api.write(
+                        os.environ.get("BUCKET"),
+                        os.environ.get("ORG"),
+                        # Since influxdb adds +2 hours internal (is always UTC)
+                        record=pivoted_flags_i.tz_localize(
+                            "UTC"
+                        ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
+                        data_frame_measurement_name="flags",
+                        data_frame_tag_columns=["location", "schedule"],
+                    )
 
-                logger.info(
-                    f"file '{filename}.csv's Flags schedule has been successfully written to influxdb for location={location}"
-                )
+                    logger.info(
+                        f"file '{filename}.csv's I Flags schedule has been successfully written to influxdb for location={location}"
+                    )
+                else:
+                    logger.info(
+                        f"file '{filename}.csv's I Flags schedule is empty and has not been written to influxdb for location={location}"
+                    )
+
+                if pivoted_flags_h.shape[0] > 0:
+                    write_api.write(
+                        os.environ.get("BUCKET"),
+                        os.environ.get("ORG"),
+                        # Since influxdb adds +2 hours internal (is always UTC)
+                        record=pivoted_flags_h.tz_localize(
+                            "UTC"
+                        ),  # tz_localize("Europe/Berlin").tz_convert("UTC"),,
+                        data_frame_measurement_name="flags",
+                        data_frame_tag_columns=["location", "schedule"],
+                    )
+
+                    logger.info(
+                        f"file '{filename}.csv's H Flags schedule has been successfully written to influxdb for location={location}"
+                    )
+                else:
+                    logger.info(
+                        f"file '{filename}.csv's H Flags schedule is empty and has not been written to influxdb for location={location}"
+                    )
 
         except Exception as e:
             print(e)
