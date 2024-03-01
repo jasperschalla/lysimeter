@@ -8,7 +8,9 @@
 """
 
 import time
-from watchdog.observers import Observer
+
+# from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver as Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent
 import logging
 import pathlib
