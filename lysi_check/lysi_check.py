@@ -988,6 +988,36 @@ def gap_fill_interpolate_all(fill_date_selector, lysi_number, col):
     st.rerun()
 
 
+def post_set_flag(data, start_index, end_index, lysi_number):
+    datasets = st.session_state["datasets"]
+    data = datasets[lysi_number]
+
+    if f"{col_selector_post}_flag" not in data.columns:
+        data[f"{col_selector_post}_flag"] = np.nan
+        data.loc[start_index:end_index, f"{col_selector_post}_flag"] = 1
+    else:
+        max_group_index = data[f"{col_selector_post}_flag"].max()
+        new_group_index = max_group_index + 1 if not np.isnan(max_group_index) else 1
+        data.loc[start_index:end_index, f"{col_selector_post}_flag"] = new_group_index
+
+    datasets[lysi_number] = data
+
+    save_days(data, start_index, end_index, data.columns[0], lysi_number)
+    st.session_state["datasets"] = datasets
+
+
+def post_undo_flag(data, start_index, end_index, lysi_number):
+    datasets = st.session_state["datasets"]
+    data = datasets[lysi_number]
+
+    data.loc[start_index:end_index, f"{col_selector_post}_flag"] = np.nan
+
+    datasets[lysi_number] = data
+
+    save_days(data, start_index, end_index, data.columns[0], lysi_number)
+    st.session_state["datasets"] = datasets
+
+
 def post_thresh(
     data_thresh,
     thresh_start_index,
@@ -1671,16 +1701,21 @@ try:
                         st.plotly_chart(fig_all, use_container_width=True)
 
                 # Adapt ylims since the lines showing missing single gaps or filled gaps have ylim of -Inf to Inf
-                if np.isnan(data[col_selector].min()):
+                if data[col_selector].dropna().shape[0] == 0:
                     ylim = [-10, 10]
                 else:
                     margin = (
-                        abs((data[col_selector].max() - data[col_selector].min()))
+                        abs(
+                            (
+                                data[col_selector].max(skipna=True)
+                                - data[col_selector].min(skipna=True)
+                            )
+                        )
                         * 0.15
                     )
                     ylim = [
-                        data[col_selector].min() - margin,
-                        data[col_selector].max() + margin,
+                        data[col_selector].min(skipna=True) - margin,
+                        data[col_selector].max(skipna=True) + margin,
                     ]
 
                 # Adapt ylim when one boundary is 0 at least
@@ -2624,6 +2659,7 @@ try:
 
                 with tool1_col:
                     base_toolbox = st.toggle("Basic Toolbox", value=True)
+                    flag_toolbox = st.toggle("Flag Toolbox", value=True)
 
                 with tool2_col:
                     balance_toolbox = st.toggle("Balance Toolbox", value=True)
@@ -4282,1060 +4318,1062 @@ try:
                                     replace_df[col_selector_post].tolist(),
                                 )
 
-                        # Use pumping model to correct water tank weight
-                        ################################################################################################
-
-                        pump_container = st.container()
-
-                        with pump_container:
-                            st.subheader("Pump Rate Correction", divider="red")
-                            rel_path = read_path.split("/")[-2]
-                            pump_path = re.sub(rel_path, "additional_filled", read_path)
-
-                            pump_preview = st.checkbox("Show preview", value=False)
-                            if "pump_data" not in st.session_state or not isinstance(
-                                st.session_state.pump_data, list
-                            ):
-                                if st.button("Load Pumping Data", type="primary"):
-                                    try:
-                                        relevant_pump_files = [
-                                            file
-                                            for file in os.listdir(pump_path)
-                                            if not file == ".DS_Store"
-                                            and format_file_date(file)
-                                            >= file_selector[0]
-                                            and format_file_date(file)
-                                            <= file_selector[1]
-                                        ]
-                                        pump_data = read_data(
-                                            pump_path,
-                                            relevant_pump_files,
-                                            type_selector,
-                                        )
-                                        st.session_state["pump_data"] = pump_data
-                                    except OverflowError as e:
-                                        print(e)
-                                        st.write(
-                                            f":red[No {type_selector} location folder for {data_selector} pumping files available]"
-                                        )
-                            # Columns for from and to date range
-                            if "pump_data" in st.session_state and isinstance(
-                                st.session_state.pump_data, list
-                            ):
-                                pump_error = False
-                                lysimeter = lysimeter_selector_post
-                                pump_data = st.session_state["pump_data"][
-                                    lysimeter - 1
-                                ][
-                                    [
-                                        data.columns[0],
-                                        f"L_{lysimeter}_PUC_S_POS",
-                                        f"L_{lysimeter}_PUC_S_NEG",
-                                    ]
-                                ].rename(
-                                    {
-                                        f"L_{lysimeter}_PUC_S_POS": "PUMP_POS",
-                                        f"L_{lysimeter}_PUC_S_NEG": "PUMP_NEG",
-                                    },
-                                    axis=1,
-                                )
-                                (
-                                    pump_from_col,
-                                    pump_to_col,
-                                ) = st.columns(2)
-
-                                with pump_from_col:
-                                    from_date_start = data[data.columns[0]].tolist()[0]
-                                    # From date
-                                    pump_date_from = st.date_input(
-                                        "From",
-                                        from_date_start,
-                                        from_date_start,
-                                        data[data.columns[0]].tolist()[-1],
-                                        key="pump_date_from",
-                                    )
-
-                                    # From time
-                                    pump_time_from = st.time_input(
-                                        "From",
-                                        datetime.datetime.strptime(
-                                            "00:00:00", "%H:%M:%S"
-                                        ).time(),
-                                        key="pump_time_from",
-                                        label_visibility="hidden",
-                                        step=10 * 60,
-                                    )
-
-                                    pump_range_from = datetime.datetime.combine(
-                                        pump_date_from,
-                                        pump_time_from,
-                                    )
-
-                                with pump_to_col:
-                                    to_date_start = data[
-                                        data[data.columns[0]] >= pump_range_from
-                                    ][data.columns[0]].tolist()[0]
-                                    # To date
-                                    pump_date_to = st.date_input(
-                                        "To",
-                                        to_date_start,
-                                        to_date_start,
-                                        data[data.columns[0]].tolist()[-1],
-                                        key="pump_date_to",
-                                    )
-
-                                    # To time
-                                    pump_time_to = st.time_input(
-                                        "To",
-                                        to_date_start.time(),
-                                        key="pump_time_to",
-                                        label_visibility="hidden",
-                                        step=10 * 60,
-                                    )
-
-                                    pump_range_to = datetime.datetime.combine(
-                                        pump_date_to, pump_time_to
-                                    )
-
-                                if pump_range_from > pump_range_to:
-                                    st.error("The selected date range is not valid.")
-                                    st.stop()
-
-                                st.info(
-                                    "The pumping data has a resolution of 10 minutes in contrast to the weight data. Therefore, the predicted weight data from the pumping data needs to be upscaled to the resolution of the weight data."
-                                )
-
-                                pump_upscale = st.radio(
-                                    "Select upscaling method",
-                                    ["zero changing rate", "interpolation"],
-                                    captions=[
-                                        "Set changing rates to zero in between the available pumping rates",
-                                        "Interpolate changing rates in between the available pumping rates",
-                                    ],
-                                )
-
-                                if data.iloc[0, 0] == pump_range_from:
-                                    pump_error = True
-                                    st.error(
-                                        "The correction cannot be applied at the edges of the loaded data."
-                                    )
-                                else:
-                                    data_start_index = (
-                                        data.index[
-                                            data[data.columns[0]] == pump_range_from
-                                        ][0]
-                                        - 1
-                                    )
-                                    data_end_index = data.index[
-                                        data[data.columns[0]] == pump_range_to
-                                    ][0]
-
-                                    data_pump = data.loc[
-                                        data_start_index:data_end_index,
-                                        [data.columns[0], col_selector_post],
-                                    ].copy()
-
-                                    pump_input = pump_data[
-                                        pump_data[pump_data.columns[0]].between(
-                                            pump_range_from, pump_range_to
-                                        )
-                                    ]
-                                    pump_input["pred"] = (
-                                        -8.34635149e-05 * pump_input["PUMP_POS"]
-                                        + 1.13169814e-04 * pump_input["PUMP_NEG"]
-                                    )
-
-                                    if pump_upscale == "zero changing rate":
-                                        pump_input["pred"].fillna(0, inplace=True)
-                                    else:
-                                        pump_input["pred"].interpolate(inplace=True)
-
-                                    if pump_input["pred"].isna().any():
-                                        st.warning(
-                                            "There are NAs in the corrected data. This can be due to NA in the pumping rate data."
-                                        )
-
-                                        if pump_input["pred"].isna().all():
-                                            st.error(
-                                                "All values are NA. This can be due to a wrong date range."
-                                            )
-                                            pump_error = True
-
-                                    if not pump_error:
-                                        pump_fill_values = (
-                                            pd.Series(
-                                                data_pump[col_selector_post].tolist()[0]
-                                            )
-                                            .append(pump_input["pred"])
-                                            .cumsum()
-                                        )
-
-                                        cumsum_range = np.maximum(
-                                            math.ceil(
-                                                (
-                                                    pump_fill_values.dropna().iloc[-1]
-                                                    - 37.5
-                                                )
-                                                / 10
-                                            ),
-                                            1,
-                                        )
-                                        cumsum_lst = []
-
-                                        for i in range(1, cumsum_range + 1):
-                                            cumsum_part = pump_fill_values[
-                                                pump_fill_values <= 47.5
-                                            ]
-                                            remove_indexes = cumsum_part.index.tolist()
-                                            if (cumsum_part.iloc[-1] + 0.5) >= 47.5:
-                                                pump_fill_values = (
-                                                    pump_fill_values.drop(
-                                                        remove_indexes
-                                                    ).diff()
-                                                )
-                                            if pump_fill_values.shape[0] > 0:
-                                                pump_fill_values.iloc[0] = 37.5
-                                                pump_fill_values = (
-                                                    pump_fill_values.cumsum()
-                                                )
-                                            cumsum_lst.append(cumsum_part.to_numpy())
-
-                                        pump_fill_values = np.concatenate(cumsum_lst)
-
-                                if pump_preview and not pump_error:
-                                    fig_pump = go.Figure(
-                                        layout=go.Layout(
-                                            title=f"Corrected Water Tank Weight for {col_selector_post}",
-                                            height=500,
-                                        )
-                                    )
-
-                                    fig_pump.add_trace(
-                                        go.Scattergl(
-                                            x=data_plot[data_plot.columns[0]],
-                                            y=data_plot[col_selector_post],
-                                            mode="lines+markers",
-                                            marker=dict(size=2, color="#4574ba"),
-                                            name="original",
-                                            showlegend=True,
-                                        )
-                                    )
-
-                                    fig_pump.add_trace(
-                                        go.Scattergl(
-                                            x=data_pump[data_pump.columns[0]],
-                                            y=pump_fill_values,
-                                            mode="lines+markers",
-                                            marker=dict(size=2, color="red"),
-                                            name="corrected",
-                                            showlegend=True,
-                                        )
-                                    )
-
-                                    st.plotly_chart(
-                                        fig_pump,
-                                        use_container_width=True,
-                                        **{"config": config},
-                                    )
-
-                                if st.button(
-                                    "Correct",
-                                    type="primary",
-                                    key="pump_correct",
-                                    disabled=pump_error,
-                                ):
-                                    post_fill(
-                                        data_start_index,
-                                        data_end_index,
-                                        col_selector_post,
-                                        post_lysi_number,
-                                        pump_fill_values,
-                                    )
-
-                    if (
-                        data_selector == "balance"
-                        and postprocess_timing_selector == "post AWAT"
-                    ):
-                        # In case the data type is 'balance', there is winter values filling available using albedo values from the EC station close by
-                        # TODO: clearify ec data structure
-                        try:
-                            winter_container = st.container()
-
-                            with winter_container:
-                                st.subheader("P and ET Winter Filling", divider="red")
-
-                                # Fetch EC and pluvio data from InfluxDB
-                                if st.button("Fetch Data", type="primary"):
-                                    fetch_ec(data, location_selector)
-
-                                # If data is available, make winter filling available
-                                if "ec_data" in st.session_state and isinstance(
-                                    st.session_state.ec_data, pd.DataFrame
-                                ):
-                                    ec_data = st.session_state.ec_data
-                                    data_day = (
-                                        data.resample("D", on=data.columns[0])
-                                        .mean()
-                                        .reset_index()
-                                    )
-
-                                    winter_type_col, parameter_col = st.columns(2)
-
-                                    # Select winter filling method
-                                    with winter_type_col:
-                                        winter_type_selector = st.selectbox(
-                                            "Select winter indication",
-                                            ["albedo", "manual"],
-                                        )
-
-                                    # Select parameter to fill
-                                    with parameter_col:
-                                        param_selector_post = st.selectbox(
-                                            "Select parameter",
-                                            ["Precipitation", "Evapotranspiration"],
-                                        )
-
-                                    # Warning for evapotranspiration filling due to lack of data
-                                    if param_selector_post == "Evapotranspiration":
-                                        st.info(
-                                            "At the moment the evapotranspiration is estimated using the penmon method based on the 'penmon' python package. Due to the lack of data it is only based on the min and max temperature as well as on the day of the year as well as all metrices that can be derived from that."
-                                        )
-
-                                    # If albedo is used for winter filling
-                                    if winter_type_selector == "albedo":
-                                        # TODO: implement albedo method
-                                        st.info(
-                                            "The albedo method is not implemented yet. Please use the manual method."
-                                        )
-
-                                        try:
-                                            (
-                                                albedo_col,
-                                                thaw_col_length,
-                                                thaw_col_type,
-                                            ) = st.columns([0.5, 0.25, 0.25])
-
-                                            # Select albedo threshold
-                                            with albedo_col:
-                                                albedo_threshold = st.number_input(
-                                                    "Select albedo threshold",
-                                                    min_value=0,
-                                                    max_value=100,
-                                                    value=50,
-                                                    step=1,
-                                                )
-                                                close_gaps = st.checkbox(
-                                                    "Ignore gaps in the middle"
-                                                )
-                                                show_preview = st.checkbox(
-                                                    "Show fill preview"
-                                                )
-
-                                            # Select thaw period
-                                            with thaw_col_length:
-                                                thaw_period_length = st.number_input(
-                                                    "Select thaw period afterwards",
-                                                    min_value=0,
-                                                    step=1,
-                                                )
-
-                                            # Select thaw period frequency unit
-                                            with thaw_col_type:
-                                                thaw_period_selector_post = (
-                                                    st.selectbox(
-                                                        "Select thaw period afterwards",
-                                                        ["days", "weeks", "months"],
-                                                        label_visibility="hidden",
-                                                    )
-                                                )
-
-                                            # Calculate timedelta for thaw period
-                                            if thaw_period_selector_post == "days":
-                                                timedelta = datetime.timedelta(
-                                                    days=thaw_period_length
-                                                )
-                                            elif thaw_period_selector_post == "weeks":
-                                                timedelta = datetime.timedelta(
-                                                    days=(thaw_period_length * 7)
-                                                )
-                                            else:
-                                                timedelta = relativedelta(
-                                                    months=+thaw_period_length
-                                                )
-
-                                            # if downsample_data and ec_data.shape[0] > 0:
-                                            #     ec_data_plot = (
-                                            #         ec_data.resample(
-                                            #             "H", on=ec_data.columns[0]
-                                            #         )
-                                            #         .mean()
-                                            #         .reset_index()
-                                            #     )
-                                            # else:
-
-                                            ec_data_plot = ec_data
-
-                                            # Plot albedo data
-                                            fig_albedo = go.Figure(
-                                                layout=go.Layout(
-                                                    height=350,
-                                                    title="Albedo by EC Station",
-                                                )
-                                            )
-
-                                            fig_albedo.add_trace(
-                                                go.Scattergl(
-                                                    x=ec_data_plot[
-                                                        ec_data_plot.columns[0]
-                                                    ],
-                                                    y=ec_data_plot["Albedo"],
-                                                    mode="markers+lines",
-                                                    line=dict(color="red"),
-                                                    name="Albedo",
-                                                    showlegend=True,
-                                                )
-                                            )
-
-                                            fig_albedo.add_hline(
-                                                y=albedo_threshold,
-                                                line_color="gray",
-                                            )
-
-                                            st.plotly_chart(
-                                                fig_albedo,
-                                                use_container_width=True,
-                                                **{"config": config},
-                                            )
-
-                                            # When gaps in between should be also filled
-                                            if close_gaps:
-                                                # Find all dates with albedo values above threshold
-                                                albedo_fills = ec_data[
-                                                    ec_data["Albedo"]
-                                                    >= albedo_threshold
-                                                ].sort_values(by=[ec_data.columns[0]])
-                                                pluvio_start_date = albedo_fills.iloc[
-                                                    0, 0
-                                                ]
-                                                pluvio_end_date_temp = (
-                                                    albedo_fills.iloc[
-                                                        (albedo_fills.shape[0] - 1),
-                                                        0,
-                                                    ]
-                                                )
-
-                                                # Add thaw period to end date
-                                                pluvio_end_date = (
-                                                    pluvio_end_date_temp + timedelta
-                                                )
-
-                                                # Filter data for given date range
-                                                pluvio_df = ec_data[
-                                                    (
-                                                        ec_data[ec_data.columns[0]]
-                                                        >= pluvio_start_date
-                                                    )
-                                                    & (
-                                                        ec_data[ec_data.columns[0]]
-                                                        <= pluvio_end_date
-                                                    )
-                                                ]
-
-                                                # If precipitation is selected, apply regression model and plot relationship
-                                                if (
-                                                    param_selector_post
-                                                    == "Precipitation"
-                                                    and not pluvio_df.shape[0]
-                                                    >= (
-                                                        data_day[
-                                                            col_selector_post
-                                                        ].shape[0]
-                                                        - 1
-                                                    )
-                                                ):
-                                                    model = sm.OLS(
-                                                        data_day[
-                                                            ~data_day[
-                                                                data_day.columms[0]
-                                                            ].isin(
-                                                                pluvio_df[
-                                                                    pluvio_df.columns[0]
-                                                                ].tolist()
-                                                            )
-                                                        ][
-                                                            col_selector_post
-                                                        ].values.reshape(
-                                                            -1, 1
-                                                        ),
-                                                        sm.add_constant(
-                                                            ec_data[
-                                                                ~ec_data[
-                                                                    ec_data.columns[0]
-                                                                ].isin(
-                                                                    pluvio_df[
-                                                                        pluvio_df.columns[
-                                                                            0
-                                                                        ]
-                                                                    ].tolist()
-                                                                )
-                                                            ][
-                                                                "precipitation"
-                                                            ].values.reshape(
-                                                                -1, 1
-                                                            )
-                                                        ),
-                                                        missing="drop",
-                                                    )
-                                                    lm = model.fit()
-                                                    # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
-                                                    if len(lm.params) == 1:
-                                                        lm.params = np.concatenate(
-                                                            [np.array([0.0]), lm.params]
-                                                        )
-
-                                                    pluvio_fill_values = (
-                                                        lm.params[0]
-                                                        + lm.params[1]
-                                                        * pluvio_df["precipitation"]
-                                                    )
-
-                                                    pluvio_df[
-                                                        "precipitation_filled"
-                                                    ] = pluvio_fill_values
-                                                else:
-                                                    pluvio_df[
-                                                        "precipitation_filled"
-                                                    ] = [np.nan] * pluvio_df.shape[0]
-                                            # When no gaps should be filled
-                                            else:
-                                                # Select date range for filling
-                                                albedo_fills = ec_data[
-                                                    ec_data["Albedo"]
-                                                    >= albedo_threshold
-                                                ].sort_values(by=[ec_data.columns[0]])
-
-                                                # When precipitation is selected as param create linear model
-                                                if (
-                                                    param_selector_post
-                                                    == "Precipitation"
-                                                    and not albedo_fills.shape[0]
-                                                    >= (
-                                                        data_day[
-                                                            col_selector_post
-                                                        ].shape[0]
-                                                        - 1
-                                                    )
-                                                ):
-                                                    model = sm.OLS(
-                                                        data_day[
-                                                            ~data_day[
-                                                                data_day.columns[0]
-                                                            ].isin(
-                                                                albedo_fills[
-                                                                    albedo_fills.columns[
-                                                                        0
-                                                                    ]
-                                                                ].tolist()
-                                                            )
-                                                        ][
-                                                            col_selector_post
-                                                        ].values.reshape(
-                                                            -1, 1
-                                                        ),
-                                                        sm.add_constant(
-                                                            ec_data[
-                                                                ~ec_data[
-                                                                    ec_data.columns[0]
-                                                                ].isin(
-                                                                    albedo_fills[
-                                                                        albedo_fills.columns[
-                                                                            0
-                                                                        ]
-                                                                    ].tolist()
-                                                                )
-                                                            ][
-                                                                "precipitation"
-                                                            ].values.reshape(
-                                                                -1, 1
-                                                            )
-                                                        ),
-                                                        missing="drop",
-                                                    )
-                                                    lm = model.fit()
-                                                    # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
-                                                    if len(lm.params) == 1:
-                                                        lm.params = np.concatenate(
-                                                            [np.array([0.0]), lm.params]
-                                                        )
-
-                                                # Calculate time difference between each albedo value
-                                                timestep = (
-                                                    albedo_fills[
-                                                        albedo_fills.columns[0]
-                                                    ]
-                                                    .diff()
-                                                    .dt.seconds[1]
-                                                )
-
-                                                # Calculate timedelta between each albedo value
-                                                time_diff = [0] + (
-                                                    albedo_fills[
-                                                        albedo_fills.columns[0]
-                                                    ]
-                                                    / timestep
-                                                ).tolist()
-
-                                                # Add timedelta and timedelta groups to dataframe
-                                                albedo_fills.loc[:, "timedelta"] = (
-                                                    time_diff
-                                                )
-                                                albedo_fills.loc[
-                                                    :, "timedelta_groups"
-                                                ] = np.where(
-                                                    albedo_fills["timedelta"] != 1.0,
-                                                    "start",
-                                                    None,
-                                                )
-                                                group_start_indices = (
-                                                    albedo_fills.index[
-                                                        albedo_fills["timedelta_groups"]
-                                                        == "start"
-                                                    ]
-                                                )
-
-                                                groups = []
-                                                # Split dataframe into groups based on timedelta
-                                                for index, group_index in enumerate(
-                                                    group_start_indices
-                                                ):
-                                                    if not (index + 1) == len(
-                                                        group_start_indices
-                                                    ):
-                                                        groups.append(
-                                                            albedo_fills.loc[
-                                                                group_index : (
-                                                                    group_start_indices[
-                                                                        index + 1
-                                                                    ]
-                                                                    - 1
-                                                                ),
-                                                                :,
-                                                            ]
-                                                        )
-                                                    else:
-                                                        groups.append(
-                                                            albedo_fills.loc[
-                                                                group_index:, :
-                                                            ]
-                                                        )
-
-                                                pluvio_lst = []
-                                                pluvio_counter = 1
-
-                                                # For each group apply regression model
-                                                for group in groups:
-                                                    pluvio_start_date = group.iloc[0, 0]
-                                                    pluvio_end_date_temp = group.iloc[
-                                                        (group.shape[0] - 1), 0
-                                                    ]
-
-                                                    pluvio_end_date = (
-                                                        pluvio_end_date_temp + timedelta
-                                                    )
-
-                                                    pluvio_df = ec_data[
-                                                        (
-                                                            ec_data[ec_data.columns[0]]
-                                                            >= pluvio_start_date
-                                                        )
-                                                        & (
-                                                            ec_data[ec_data.columns[0]]
-                                                            <= pluvio_end_date
-                                                        )
-                                                    ]
-                                                    if (
-                                                        param_selector_post
-                                                        == "Precipitation"
-                                                        and not albedo_fills.shape[0]
-                                                        >= (
-                                                            data_day[
-                                                                col_selector_post
-                                                            ].shape[0]
-                                                            - 1
-                                                        )
-                                                    ):
-                                                        pluvio_fill_values = (
-                                                            lm.params[0]
-                                                            + lm.params[1]
-                                                            * pluvio_df["precipitation"]
-                                                        )
-
-                                                        pluvio_df[
-                                                            "precipitation_filled"
-                                                        ] = pluvio_fill_values
-                                                        pluvio_df[
-                                                            "precipitation_groups"
-                                                        ] = pluvio_counter
-                                                        pluvio_counter += 1
-
-                                                        pluvio_lst.append(pluvio_df)
-                                                    elif (
-                                                        param_selector_post
-                                                        == "Evapotranspiration"
-                                                    ):
-                                                        pluvio_lst.append(pluvio_df)
-                                                    else:
-                                                        pluvio_df[
-                                                            "precipitation_filled"
-                                                        ] = [np.nan] * pluvio_df.shape[
-                                                            0
-                                                        ]
-                                                        pluvio_lst.append(pluvio_df)
-
-                                                pluvio_df_temp = pd.concat(pluvio_lst)
-                                                pluvio_df = (
-                                                    pluvio_df_temp.drop_duplicates(
-                                                        subset=[
-                                                            pluvio_df_temp.columns[0]
-                                                        ]
-                                                    )
-                                                )
-
-                                        except Exception:
-                                            pass
-
-                                    else:
-                                        st.write("Select date range")
-
-                                        winter_from_col, winter_to_col = st.columns(2)
-
-                                        with winter_from_col:
-                                            from_date_start = data[
-                                                data.columns[0]
-                                            ].tolist()[0]
-
-                                            # From date
-                                            winter_date_from = st.date_input(
-                                                "From",
-                                                from_date_start,
-                                                from_date_start,
-                                                data[data.columns[0]].tolist()[-1],
-                                                key="winter_date_from",
-                                            )
-
-                                            # From time
-                                            winter_time_from = st.time_input(
-                                                "To",
-                                                datetime.datetime.strptime(
-                                                    "00:00:00", "%H:%M:%S"
-                                                ).time(),
-                                                key="winter_time_from",
-                                                label_visibility="hidden",
-                                            )
-
-                                            from_winter = datetime.datetime.combine(
-                                                winter_date_from, winter_time_from
-                                            )
-
-                                        with winter_to_col:
-                                            to_date_start = data[
-                                                data[data.columns[0]] >= from_winter
-                                            ][data.columns[0]].tolist()[0]
-
-                                            winter_date_to = st.date_input(
-                                                "To",
-                                                to_date_start,
-                                                to_date_start,
-                                                data[data.columns[0]].tolist()[-1],
-                                                key="winter_date_to",
-                                            )
-
-                                            # From time
-                                            winter_time_to = st.time_input(
-                                                "To",
-                                                to_date_start.time(),
-                                                key="winter_time_to",
-                                                label_visibility="hidden",
-                                            )
-
-                                            to_winter = datetime.datetime.combine(
-                                                winter_date_to, winter_time_to
-                                            )
-
-                                        if from_winter > to_winter:
-                                            st.error(
-                                                "The selected date range is not valid."
-                                            )
-                                            st.stop()
-
-                                        show_preview = st.checkbox("Show fill preview")
-                                        close_gaps = False
-
-                                        pluvio_df = ec_data[
-                                            (ec_data[ec_data.columns[0]] >= from_winter)
-                                            & (ec_data[ec_data.columns[0]] <= to_winter)
-                                        ]
-
-                                        # If precipitation is selected, apply regression model
-                                        if (
-                                            param_selector_post == "Precipitation"
-                                            and not pluvio_df.shape[0]
-                                            >= (
-                                                data_day[col_selector_post].shape[0] - 1
-                                            )
-                                        ):
-                                            model = sm.OLS(
-                                                data_day[
-                                                    ~data_day[data_day.columns[0]].isin(
-                                                        pluvio_df[
-                                                            pluvio_df.columns[0]
-                                                        ].tolist()
-                                                    )
-                                                ][col_selector_post].values.reshape(
-                                                    -1, 1
-                                                ),
-                                                sm.add_constant(
-                                                    ec_data[
-                                                        ~ec_data[
-                                                            ec_data.columns[0]
-                                                        ].isin(
-                                                            pluvio_df[
-                                                                pluvio_df.columns[0]
-                                                            ].tolist()
-                                                        )
-                                                    ]["precipitation"].values.reshape(
-                                                        -1, 1
-                                                    )
-                                                ),
-                                                missing="drop",
-                                            )
-                                            lm = model.fit()
-                                            # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
-                                            if len(lm.params) == 1:
-                                                lm.params = np.concatenate(
-                                                    [np.array([0.0]), lm.params]
-                                                )
-
-                                            pluvio_fill_values = (
-                                                lm.params[0]
-                                                + lm.params[1]
-                                                * pluvio_df["precipitation"]
-                                            )
-
-                                            pluvio_df["precipitation_filled"] = (
-                                                pluvio_fill_values
-                                            )
-                                        else:
-                                            pluvio_df["precipitation_filled"] = [
-                                                np.nan
-                                            ] * pluvio_df.shape[0]
-
-                                    if (
-                                        show_preview
-                                        and not winter_type_selector == "albedo"
-                                    ):  # TODO: change when method implemented
-                                        # if downsample_data and pluvio_df.shape[0] > 0:
-                                        #     pluvio_df_plot = (
-                                        #         pluvio_df.resample(
-                                        #             "H", on=pluvio_df.columns[0]
-                                        #         )
-                                        #         .mean()
-                                        #         .reset_index()
-                                        #     )
-                                        # else:
-                                        pluvio_df_plot = pluvio_df
-
-                                        fig_pluvio = go.Figure(
-                                            layout=go.Layout(
-                                                height=450, title="Fill Preview"
-                                            )
-                                        )
-                                        if (
-                                            close_gaps
-                                            and winter_type_selector == "albedo"
-                                        ):
-                                            if param_selector_post == "Precipitation":
-                                                fig_pluvio.add_scatter(
-                                                    x=pluvio_df_plot[
-                                                        pluvio_df_plot.columns[0]
-                                                    ],
-                                                    y=pluvio_df_plot[
-                                                        "precipitation_filled"
-                                                    ],
-                                                    name="replaced",
-                                                    mode="markers+lines",
-                                                    marker=dict(size=2, color="red"),
-                                                )
-                                            else:
-                                                fig_pluvio.add_scatter(
-                                                    x=pluvio_df_plot[
-                                                        pluvio_df_plot.columns[0]
-                                                    ],
-                                                    y=pluvio_df_plot["eto"],
-                                                    name="replaced",
-                                                    mode="markers+lines",
-                                                    marker=dict(size=2, color="green"),
-                                                )
-
-                                        elif (
-                                            not close_gaps
-                                            and winter_type_selector == "albedo"
-                                        ):
-                                            show_legend = True
-                                            scatter_groups = pluvio_df.groupby(
-                                                [f"{param_selector_post}_groups"]
-                                            )
-                                            for name, group in scatter_groups:
-                                                group_plot = group
-
-                                                # if downsample_data and group.shape[0] > 0:
-                                                #     group_plot = (
-                                                #         group.resample(
-                                                #             "H", on=group.columns[0]
-                                                #         )
-                                                #         .mean()
-                                                #         .reset_index()
-                                                #     )
-
-                                                if (
-                                                    param_selector_post
-                                                    == "Precipitation"
-                                                ):
-                                                    fig_pluvio.add_scatter(
-                                                        x=group_plot[
-                                                            group_plot.columns[0]
-                                                        ],
-                                                        y=group_plot[
-                                                            f"precipitation_filled"
-                                                        ],
-                                                        name="replaced",
-                                                        mode="markers+lines",
-                                                        marker=dict(
-                                                            size=2, color="red"
-                                                        ),
-                                                        showlegend=show_legend,
-                                                    )
-                                                    if show_legend:
-                                                        show_legend = False
-                                                else:
-                                                    fig_pluvio.add_scatter(
-                                                        x=group_plot[
-                                                            group_plot.columns[0]
-                                                        ],
-                                                        y=group_plot["eto"],
-                                                        name="replaced",
-                                                        mode="markers+lines",
-                                                        marker=dict(
-                                                            size=2, color="green"
-                                                        ),
-                                                        showlegend=show_legend,
-                                                    )
-                                                    if show_legend:
-                                                        show_legend = False
-                                        else:
-                                            if param_selector_post == "Precipitation":
-                                                fig_pluvio.add_scatter(
-                                                    x=pluvio_df_plot[
-                                                        pluvio_df_plot.columns[0]
-                                                    ],
-                                                    y=pluvio_df_plot[
-                                                        "precipitation_filled"
-                                                    ],
-                                                    name="replaced",
-                                                    mode="markers+lines",
-                                                    marker=dict(size=2, color="red"),
-                                                )
-                                            else:
-                                                fig_pluvio.add_scatter(
-                                                    x=pluvio_df_plot[
-                                                        pluvio_df_plot.columns[0]
-                                                    ],
-                                                    y=pluvio_df_plot["eto"],
-                                                    name="replaced",
-                                                    mode="markers+lines",
-                                                    marker=dict(size=2, color="green"),
-                                                )
-
-                                        fig_pluvio.add_trace(
-                                            go.Scattergl(
-                                                x=data_day[data_day.columns[0]],
-                                                y=data_day[col_selector_post],
-                                                name="original",
-                                                mode="markers+lines",
-                                                marker=dict(size=2, color="#4574ba"),
-                                            )
-                                        )
-                                        st.plotly_chart(
-                                            fig_pluvio,
-                                            use_container_width=True,
-                                            **{"config": config},
-                                        )
-
-                                        lm_x = ec_data[
-                                            ~ec_data[ec_data.columns[0]].isin(
-                                                pluvio_df[pluvio_df.columns[0]].tolist()
-                                            )
-                                        ]
-
-                                        lm_y = data_day[
-                                            ~data_day[data_day.columns[0]].isin(
-                                                pluvio_df[pluvio_df.columns[0]].tolist()
-                                            )
-                                        ]
-
-                                        if (
-                                            param_selector_post == "Precipitation"
-                                            and lm_x.shape[0] > 1
-                                        ):
-                                            # if downsample_data and lm_x.shape[0] > 0:
-                                            #     lm_y = (
-                                            #         lm_y.resample("H", on=lm_y.columns[0])
-                                            #         .mean()
-                                            #         .reset_index()
-                                            #     )
-                                            #     lm_x = (
-                                            #         lm_x.resample("H", on=lm_x.columns[0])
-                                            #         .mean()
-                                            #         .reset_index()
-                                            #     )
-
-                                            fig_lm = px.scatter(
-                                                x=lm_x["precipitation"],
-                                                y=lm_y[col_selector_post],
-                                                trendline="ols",
-                                                color_discrete_sequence=["red"],
-                                                title=f"Used Linear Regression Between Pluvio and Lysimeter {lysimeter_selector_post} Data",
-                                                labels={
-                                                    "x": "Pluvio Precipitation",
-                                                    "y": f"Lysimeter {lysimeter_selector_post} Precipitation",
-                                                },
-                                                render_mode="webgl",
-                                            )
-                                            st.plotly_chart(
-                                                fig_lm,
-                                                use_container_width=True,
-                                                **{"config": config},
-                                            )
-                                        elif param_selector_post == "Precipitation":
-                                            st.error(
-                                                "There is no data for the regression model! This may be due to the fact that at least two days that are not within the winter period are needed for the regression model."
-                                            )
-
-                                    if st.button(
-                                        "Fill",
-                                        type="primary",
-                                        key="albedo_post",
-                                        disabled=(winter_type_selector == "albedo"),
-                                    ):  # TODO: change when method implemented
-                                        post_fill_winter(
-                                            pluvio_df,
-                                            param_selector_post,
-                                            post_lysi_number,
-                                        )
-                        except Exception:
-                            st.error(
-                                "Some error occured during the winter filling! May be caused by problems with fetching the data."
-                            )
+                        ## REMOVED
+                        # # Use pumping model to correct water tank weight
+                        # ################################################################################################
+
+                        # pump_container = st.container()
+
+                        # with pump_container:
+                        #     st.subheader("Pump Rate Correction", divider="red")
+                        #     rel_path = read_path.split("/")[-2]
+                        #     pump_path = re.sub(rel_path, "additional_filled", read_path)
+
+                        #     pump_preview = st.checkbox("Show preview", value=False)
+                        #     if "pump_data" not in st.session_state or not isinstance(
+                        #         st.session_state.pump_data, list
+                        #     ):
+                        #         if st.button("Load Pumping Data", type="primary"):
+                        #             try:
+                        #                 relevant_pump_files = [
+                        #                     file
+                        #                     for file in os.listdir(pump_path)
+                        #                     if not file == ".DS_Store"
+                        #                     and format_file_date(file)
+                        #                     >= file_selector[0]
+                        #                     and format_file_date(file)
+                        #                     <= file_selector[1]
+                        #                 ]
+                        #                 pump_data = read_data(
+                        #                     pump_path,
+                        #                     relevant_pump_files,
+                        #                     type_selector,
+                        #                 )
+                        #                 st.session_state["pump_data"] = pump_data
+                        #             except OverflowError as e:
+                        #                 print(e)
+                        #                 st.write(
+                        #                     f":red[No {type_selector} location folder for {data_selector} pumping files available]"
+                        #                 )
+                        #     # Columns for from and to date range
+                        #     if "pump_data" in st.session_state and isinstance(
+                        #         st.session_state.pump_data, list
+                        #     ):
+                        #         pump_error = False
+                        #         lysimeter = lysimeter_selector_post
+                        #         pump_data = st.session_state["pump_data"][
+                        #             lysimeter - 1
+                        #         ][
+                        #             [
+                        #                 data.columns[0],
+                        #                 f"L_{lysimeter}_PUC_S_POS",
+                        #                 f"L_{lysimeter}_PUC_S_NEG",
+                        #             ]
+                        #         ].rename(
+                        #             {
+                        #                 f"L_{lysimeter}_PUC_S_POS": "PUMP_POS",
+                        #                 f"L_{lysimeter}_PUC_S_NEG": "PUMP_NEG",
+                        #             },
+                        #             axis=1,
+                        #         )
+                        #         (
+                        #             pump_from_col,
+                        #             pump_to_col,
+                        #         ) = st.columns(2)
+
+                        #         with pump_from_col:
+                        #             from_date_start = data[data.columns[0]].tolist()[0]
+                        #             # From date
+                        #             pump_date_from = st.date_input(
+                        #                 "From",
+                        #                 from_date_start,
+                        #                 from_date_start,
+                        #                 data[data.columns[0]].tolist()[-1],
+                        #                 key="pump_date_from",
+                        #             )
+
+                        #             # From time
+                        #             pump_time_from = st.time_input(
+                        #                 "From",
+                        #                 datetime.datetime.strptime(
+                        #                     "00:00:00", "%H:%M:%S"
+                        #                 ).time(),
+                        #                 key="pump_time_from",
+                        #                 label_visibility="hidden",
+                        #                 step=10 * 60,
+                        #             )
+
+                        #             pump_range_from = datetime.datetime.combine(
+                        #                 pump_date_from,
+                        #                 pump_time_from,
+                        #             )
+
+                        #         with pump_to_col:
+                        #             to_date_start = data[
+                        #                 data[data.columns[0]] >= pump_range_from
+                        #             ][data.columns[0]].tolist()[0]
+                        #             # To date
+                        #             pump_date_to = st.date_input(
+                        #                 "To",
+                        #                 to_date_start,
+                        #                 to_date_start,
+                        #                 data[data.columns[0]].tolist()[-1],
+                        #                 key="pump_date_to",
+                        #             )
+
+                        #             # To time
+                        #             pump_time_to = st.time_input(
+                        #                 "To",
+                        #                 to_date_start.time(),
+                        #                 key="pump_time_to",
+                        #                 label_visibility="hidden",
+                        #                 step=10 * 60,
+                        #             )
+
+                        #             pump_range_to = datetime.datetime.combine(
+                        #                 pump_date_to, pump_time_to
+                        #             )
+
+                        #         if pump_range_from > pump_range_to:
+                        #             st.error("The selected date range is not valid.")
+                        #             st.stop()
+
+                        #         st.info(
+                        #             "The pumping data has a resolution of 10 minutes in contrast to the weight data. Therefore, the predicted weight data from the pumping data needs to be upscaled to the resolution of the weight data."
+                        #         )
+
+                        #         pump_upscale = st.radio(
+                        #             "Select upscaling method",
+                        #             ["zero changing rate", "interpolation"],
+                        #             captions=[
+                        #                 "Set changing rates to zero in between the available pumping rates",
+                        #                 "Interpolate changing rates in between the available pumping rates",
+                        #             ],
+                        #         )
+
+                        #         if data.iloc[0, 0] == pump_range_from:
+                        #             pump_error = True
+                        #             st.error(
+                        #                 "The correction cannot be applied at the edges of the loaded data."
+                        #             )
+                        #         else:
+                        #             data_start_index = (
+                        #                 data.index[
+                        #                     data[data.columns[0]] == pump_range_from
+                        #                 ][0]
+                        #                 - 1
+                        #             )
+                        #             data_end_index = data.index[
+                        #                 data[data.columns[0]] == pump_range_to
+                        #             ][0]
+
+                        #             data_pump = data.loc[
+                        #                 data_start_index:data_end_index,
+                        #                 [data.columns[0], col_selector_post],
+                        #             ].copy()
+
+                        #             pump_input = pump_data[
+                        #                 pump_data[pump_data.columns[0]].between(
+                        #                     pump_range_from, pump_range_to
+                        #                 )
+                        #             ]
+                        #             pump_input["pred"] = (
+                        #                 -8.34635149e-05 * pump_input["PUMP_POS"]
+                        #                 + 1.13169814e-04 * pump_input["PUMP_NEG"]
+                        #             )
+
+                        #             if pump_upscale == "zero changing rate":
+                        #                 pump_input["pred"].fillna(0, inplace=True)
+                        #             else:
+                        #                 pump_input["pred"].interpolate(inplace=True)
+
+                        #             if pump_input["pred"].isna().any():
+                        #                 st.warning(
+                        #                     "There are NAs in the corrected data. This can be due to NA in the pumping rate data."
+                        #                 )
+
+                        #                 if pump_input["pred"].isna().all():
+                        #                     st.error(
+                        #                         "All values are NA. This can be due to a wrong date range."
+                        #                     )
+                        #                     pump_error = True
+
+                        #             if not pump_error:
+                        #                 pump_fill_values = (
+                        #                     pd.Series(
+                        #                         data_pump[col_selector_post].tolist()[0]
+                        #                     )
+                        #                     .append(pump_input["pred"])
+                        #                     .cumsum()
+                        #                 )
+
+                        #                 cumsum_range = np.maximum(
+                        #                     math.ceil(
+                        #                         (
+                        #                             pump_fill_values.dropna().iloc[-1]
+                        #                             - 37.5
+                        #                         )
+                        #                         / 10
+                        #                     ),
+                        #                     1,
+                        #                 )
+                        #                 cumsum_lst = []
+
+                        #                 for i in range(1, cumsum_range + 1):
+                        #                     cumsum_part = pump_fill_values[
+                        #                         pump_fill_values <= 47.5
+                        #                     ]
+                        #                     remove_indexes = cumsum_part.index.tolist()
+                        #                     if (cumsum_part.iloc[-1] + 0.5) >= 47.5:
+                        #                         pump_fill_values = (
+                        #                             pump_fill_values.drop(
+                        #                                 remove_indexes
+                        #                             ).diff()
+                        #                         )
+                        #                     if pump_fill_values.shape[0] > 0:
+                        #                         pump_fill_values.iloc[0] = 37.5
+                        #                         pump_fill_values = (
+                        #                             pump_fill_values.cumsum()
+                        #                         )
+                        #                     cumsum_lst.append(cumsum_part.to_numpy())
+
+                        #                 pump_fill_values = np.concatenate(cumsum_lst)
+
+                        #         if pump_preview and not pump_error:
+                        #             fig_pump = go.Figure(
+                        #                 layout=go.Layout(
+                        #                     title=f"Corrected Water Tank Weight for {col_selector_post}",
+                        #                     height=500,
+                        #                 )
+                        #             )
+
+                        #             fig_pump.add_trace(
+                        #                 go.Scattergl(
+                        #                     x=data_plot[data_plot.columns[0]],
+                        #                     y=data_plot[col_selector_post],
+                        #                     mode="lines+markers",
+                        #                     marker=dict(size=2, color="#4574ba"),
+                        #                     name="original",
+                        #                     showlegend=True,
+                        #                 )
+                        #             )
+
+                        #             fig_pump.add_trace(
+                        #                 go.Scattergl(
+                        #                     x=data_pump[data_pump.columns[0]],
+                        #                     y=pump_fill_values,
+                        #                     mode="lines+markers",
+                        #                     marker=dict(size=2, color="red"),
+                        #                     name="corrected",
+                        #                     showlegend=True,
+                        #                 )
+                        #             )
+
+                        #             st.plotly_chart(
+                        #                 fig_pump,
+                        #                 use_container_width=True,
+                        #                 **{"config": config},
+                        #             )
+
+                        #         if st.button(
+                        #             "Correct",
+                        #             type="primary",
+                        #             key="pump_correct",
+                        #             disabled=pump_error,
+                        #         ):
+                        #             post_fill(
+                        #                 data_start_index,
+                        #                 data_end_index,
+                        #                 col_selector_post,
+                        #                 post_lysi_number,
+                        #                 pump_fill_values,
+                        #             )
+
+                    ## REMOVED
+                    # if (
+                    #     data_selector == "balance"
+                    #     and postprocess_timing_selector == "post AWAT"
+                    # ):
+                    #     # In case the data type is 'balance', there is winter values filling available using albedo values from the EC station close by
+                    #     # TODO: clearify ec data structure
+                    #     try:
+                    #         winter_container = st.container()
+
+                    #         with winter_container:
+                    #             st.subheader("P and ET Winter Filling", divider="red")
+
+                    #             # Fetch EC and pluvio data from InfluxDB
+                    #             if st.button("Fetch Data", type="primary"):
+                    #                 fetch_ec(data, location_selector)
+
+                    #             # If data is available, make winter filling available
+                    #             if "ec_data" in st.session_state and isinstance(
+                    #                 st.session_state.ec_data, pd.DataFrame
+                    #             ):
+                    #                 ec_data = st.session_state.ec_data
+                    #                 data_day = (
+                    #                     data.resample("D", on=data.columns[0])
+                    #                     .mean()
+                    #                     .reset_index()
+                    #                 )
+
+                    #                 winter_type_col, parameter_col = st.columns(2)
+
+                    #                 # Select winter filling method
+                    #                 with winter_type_col:
+                    #                     winter_type_selector = st.selectbox(
+                    #                         "Select winter indication",
+                    #                         ["albedo", "manual"],
+                    #                     )
+
+                    #                 # Select parameter to fill
+                    #                 with parameter_col:
+                    #                     param_selector_post = st.selectbox(
+                    #                         "Select parameter",
+                    #                         ["Precipitation", "Evapotranspiration"],
+                    #                     )
+
+                    #                 # Warning for evapotranspiration filling due to lack of data
+                    #                 if param_selector_post == "Evapotranspiration":
+                    #                     st.info(
+                    #                         "At the moment the evapotranspiration is estimated using the penmon method based on the 'penmon' python package. Due to the lack of data it is only based on the min and max temperature as well as on the day of the year as well as all metrices that can be derived from that."
+                    #                     )
+
+                    #                 # If albedo is used for winter filling
+                    #                 if winter_type_selector == "albedo":
+                    #                     # TODO: implement albedo method
+                    #                     st.info(
+                    #                         "The albedo method is not implemented yet. Please use the manual method."
+                    #                     )
+
+                    #                     try:
+                    #                         (
+                    #                             albedo_col,
+                    #                             thaw_col_length,
+                    #                             thaw_col_type,
+                    #                         ) = st.columns([0.5, 0.25, 0.25])
+
+                    #                         # Select albedo threshold
+                    #                         with albedo_col:
+                    #                             albedo_threshold = st.number_input(
+                    #                                 "Select albedo threshold",
+                    #                                 min_value=0,
+                    #                                 max_value=100,
+                    #                                 value=50,
+                    #                                 step=1,
+                    #                             )
+                    #                             close_gaps = st.checkbox(
+                    #                                 "Ignore gaps in the middle"
+                    #                             )
+                    #                             show_preview = st.checkbox(
+                    #                                 "Show fill preview"
+                    #                             )
+
+                    #                         # Select thaw period
+                    #                         with thaw_col_length:
+                    #                             thaw_period_length = st.number_input(
+                    #                                 "Select thaw period afterwards",
+                    #                                 min_value=0,
+                    #                                 step=1,
+                    #                             )
+
+                    #                         # Select thaw period frequency unit
+                    #                         with thaw_col_type:
+                    #                             thaw_period_selector_post = (
+                    #                                 st.selectbox(
+                    #                                     "Select thaw period afterwards",
+                    #                                     ["days", "weeks", "months"],
+                    #                                     label_visibility="hidden",
+                    #                                 )
+                    #                             )
+
+                    #                         # Calculate timedelta for thaw period
+                    #                         if thaw_period_selector_post == "days":
+                    #                             timedelta = datetime.timedelta(
+                    #                                 days=thaw_period_length
+                    #                             )
+                    #                         elif thaw_period_selector_post == "weeks":
+                    #                             timedelta = datetime.timedelta(
+                    #                                 days=(thaw_period_length * 7)
+                    #                             )
+                    #                         else:
+                    #                             timedelta = relativedelta(
+                    #                                 months=+thaw_period_length
+                    #                             )
+
+                    #                         # if downsample_data and ec_data.shape[0] > 0:
+                    #                         #     ec_data_plot = (
+                    #                         #         ec_data.resample(
+                    #                         #             "H", on=ec_data.columns[0]
+                    #                         #         )
+                    #                         #         .mean()
+                    #                         #         .reset_index()
+                    #                         #     )
+                    #                         # else:
+
+                    #                         ec_data_plot = ec_data
+
+                    #                         # Plot albedo data
+                    #                         fig_albedo = go.Figure(
+                    #                             layout=go.Layout(
+                    #                                 height=350,
+                    #                                 title="Albedo by EC Station",
+                    #                             )
+                    #                         )
+
+                    #                         fig_albedo.add_trace(
+                    #                             go.Scattergl(
+                    #                                 x=ec_data_plot[
+                    #                                     ec_data_plot.columns[0]
+                    #                                 ],
+                    #                                 y=ec_data_plot["Albedo"],
+                    #                                 mode="markers+lines",
+                    #                                 line=dict(color="red"),
+                    #                                 name="Albedo",
+                    #                                 showlegend=True,
+                    #                             )
+                    #                         )
+
+                    #                         fig_albedo.add_hline(
+                    #                             y=albedo_threshold,
+                    #                             line_color="gray",
+                    #                         )
+
+                    #                         st.plotly_chart(
+                    #                             fig_albedo,
+                    #                             use_container_width=True,
+                    #                             **{"config": config},
+                    #                         )
+
+                    #                         # When gaps in between should be also filled
+                    #                         if close_gaps:
+                    #                             # Find all dates with albedo values above threshold
+                    #                             albedo_fills = ec_data[
+                    #                                 ec_data["Albedo"]
+                    #                                 >= albedo_threshold
+                    #                             ].sort_values(by=[ec_data.columns[0]])
+                    #                             pluvio_start_date = albedo_fills.iloc[
+                    #                                 0, 0
+                    #                             ]
+                    #                             pluvio_end_date_temp = (
+                    #                                 albedo_fills.iloc[
+                    #                                     (albedo_fills.shape[0] - 1),
+                    #                                     0,
+                    #                                 ]
+                    #                             )
+
+                    #                             # Add thaw period to end date
+                    #                             pluvio_end_date = (
+                    #                                 pluvio_end_date_temp + timedelta
+                    #                             )
+
+                    #                             # Filter data for given date range
+                    #                             pluvio_df = ec_data[
+                    #                                 (
+                    #                                     ec_data[ec_data.columns[0]]
+                    #                                     >= pluvio_start_date
+                    #                                 )
+                    #                                 & (
+                    #                                     ec_data[ec_data.columns[0]]
+                    #                                     <= pluvio_end_date
+                    #                                 )
+                    #                             ]
+
+                    #                             # If precipitation is selected, apply regression model and plot relationship
+                    #                             if (
+                    #                                 param_selector_post
+                    #                                 == "Precipitation"
+                    #                                 and not pluvio_df.shape[0]
+                    #                                 >= (
+                    #                                     data_day[
+                    #                                         col_selector_post
+                    #                                     ].shape[0]
+                    #                                     - 1
+                    #                                 )
+                    #                             ):
+                    #                                 model = sm.OLS(
+                    #                                     data_day[
+                    #                                         ~data_day[
+                    #                                             data_day.columms[0]
+                    #                                         ].isin(
+                    #                                             pluvio_df[
+                    #                                                 pluvio_df.columns[0]
+                    #                                             ].tolist()
+                    #                                         )
+                    #                                     ][
+                    #                                         col_selector_post
+                    #                                     ].values.reshape(
+                    #                                         -1, 1
+                    #                                     ),
+                    #                                     sm.add_constant(
+                    #                                         ec_data[
+                    #                                             ~ec_data[
+                    #                                                 ec_data.columns[0]
+                    #                                             ].isin(
+                    #                                                 pluvio_df[
+                    #                                                     pluvio_df.columns[
+                    #                                                         0
+                    #                                                     ]
+                    #                                                 ].tolist()
+                    #                                             )
+                    #                                         ][
+                    #                                             "precipitation"
+                    #                                         ].values.reshape(
+                    #                                             -1, 1
+                    #                                         )
+                    #                                     ),
+                    #                                     missing="drop",
+                    #                                 )
+                    #                                 lm = model.fit()
+                    #                                 # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
+                    #                                 if len(lm.params) == 1:
+                    #                                     lm.params = np.concatenate(
+                    #                                         [np.array([0.0]), lm.params]
+                    #                                     )
+
+                    #                                 pluvio_fill_values = (
+                    #                                     lm.params[0]
+                    #                                     + lm.params[1]
+                    #                                     * pluvio_df["precipitation"]
+                    #                                 )
+
+                    #                                 pluvio_df[
+                    #                                     "precipitation_filled"
+                    #                                 ] = pluvio_fill_values
+                    #                             else:
+                    #                                 pluvio_df[
+                    #                                     "precipitation_filled"
+                    #                                 ] = [np.nan] * pluvio_df.shape[0]
+                    #                         # When no gaps should be filled
+                    #                         else:
+                    #                             # Select date range for filling
+                    #                             albedo_fills = ec_data[
+                    #                                 ec_data["Albedo"]
+                    #                                 >= albedo_threshold
+                    #                             ].sort_values(by=[ec_data.columns[0]])
+
+                    #                             # When precipitation is selected as param create linear model
+                    #                             if (
+                    #                                 param_selector_post
+                    #                                 == "Precipitation"
+                    #                                 and not albedo_fills.shape[0]
+                    #                                 >= (
+                    #                                     data_day[
+                    #                                         col_selector_post
+                    #                                     ].shape[0]
+                    #                                     - 1
+                    #                                 )
+                    #                             ):
+                    #                                 model = sm.OLS(
+                    #                                     data_day[
+                    #                                         ~data_day[
+                    #                                             data_day.columns[0]
+                    #                                         ].isin(
+                    #                                             albedo_fills[
+                    #                                                 albedo_fills.columns[
+                    #                                                     0
+                    #                                                 ]
+                    #                                             ].tolist()
+                    #                                         )
+                    #                                     ][
+                    #                                         col_selector_post
+                    #                                     ].values.reshape(
+                    #                                         -1, 1
+                    #                                     ),
+                    #                                     sm.add_constant(
+                    #                                         ec_data[
+                    #                                             ~ec_data[
+                    #                                                 ec_data.columns[0]
+                    #                                             ].isin(
+                    #                                                 albedo_fills[
+                    #                                                     albedo_fills.columns[
+                    #                                                         0
+                    #                                                     ]
+                    #                                                 ].tolist()
+                    #                                             )
+                    #                                         ][
+                    #                                             "precipitation"
+                    #                                         ].values.reshape(
+                    #                                             -1, 1
+                    #                                         )
+                    #                                     ),
+                    #                                     missing="drop",
+                    #                                 )
+                    #                                 lm = model.fit()
+                    #                                 # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
+                    #                                 if len(lm.params) == 1:
+                    #                                     lm.params = np.concatenate(
+                    #                                         [np.array([0.0]), lm.params]
+                    #                                     )
+
+                    #                             # Calculate time difference between each albedo value
+                    #                             timestep = (
+                    #                                 albedo_fills[
+                    #                                     albedo_fills.columns[0]
+                    #                                 ]
+                    #                                 .diff()
+                    #                                 .dt.seconds[1]
+                    #                             )
+
+                    #                             # Calculate timedelta between each albedo value
+                    #                             time_diff = [0] + (
+                    #                                 albedo_fills[
+                    #                                     albedo_fills.columns[0]
+                    #                                 ]
+                    #                                 / timestep
+                    #                             ).tolist()
+
+                    #                             # Add timedelta and timedelta groups to dataframe
+                    #                             albedo_fills.loc[:, "timedelta"] = (
+                    #                                 time_diff
+                    #                             )
+                    #                             albedo_fills.loc[
+                    #                                 :, "timedelta_groups"
+                    #                             ] = np.where(
+                    #                                 albedo_fills["timedelta"] != 1.0,
+                    #                                 "start",
+                    #                                 None,
+                    #                             )
+                    #                             group_start_indices = (
+                    #                                 albedo_fills.index[
+                    #                                     albedo_fills["timedelta_groups"]
+                    #                                     == "start"
+                    #                                 ]
+                    #                             )
+
+                    #                             groups = []
+                    #                             # Split dataframe into groups based on timedelta
+                    #                             for index, group_index in enumerate(
+                    #                                 group_start_indices
+                    #                             ):
+                    #                                 if not (index + 1) == len(
+                    #                                     group_start_indices
+                    #                                 ):
+                    #                                     groups.append(
+                    #                                         albedo_fills.loc[
+                    #                                             group_index : (
+                    #                                                 group_start_indices[
+                    #                                                     index + 1
+                    #                                                 ]
+                    #                                                 - 1
+                    #                                             ),
+                    #                                             :,
+                    #                                         ]
+                    #                                     )
+                    #                                 else:
+                    #                                     groups.append(
+                    #                                         albedo_fills.loc[
+                    #                                             group_index:, :
+                    #                                         ]
+                    #                                     )
+
+                    #                             pluvio_lst = []
+                    #                             pluvio_counter = 1
+
+                    #                             # For each group apply regression model
+                    #                             for group in groups:
+                    #                                 pluvio_start_date = group.iloc[0, 0]
+                    #                                 pluvio_end_date_temp = group.iloc[
+                    #                                     (group.shape[0] - 1), 0
+                    #                                 ]
+
+                    #                                 pluvio_end_date = (
+                    #                                     pluvio_end_date_temp + timedelta
+                    #                                 )
+
+                    #                                 pluvio_df = ec_data[
+                    #                                     (
+                    #                                         ec_data[ec_data.columns[0]]
+                    #                                         >= pluvio_start_date
+                    #                                     )
+                    #                                     & (
+                    #                                         ec_data[ec_data.columns[0]]
+                    #                                         <= pluvio_end_date
+                    #                                     )
+                    #                                 ]
+                    #                                 if (
+                    #                                     param_selector_post
+                    #                                     == "Precipitation"
+                    #                                     and not albedo_fills.shape[0]
+                    #                                     >= (
+                    #                                         data_day[
+                    #                                             col_selector_post
+                    #                                         ].shape[0]
+                    #                                         - 1
+                    #                                     )
+                    #                                 ):
+                    #                                     pluvio_fill_values = (
+                    #                                         lm.params[0]
+                    #                                         + lm.params[1]
+                    #                                         * pluvio_df["precipitation"]
+                    #                                     )
+
+                    #                                     pluvio_df[
+                    #                                         "precipitation_filled"
+                    #                                     ] = pluvio_fill_values
+                    #                                     pluvio_df[
+                    #                                         "precipitation_groups"
+                    #                                     ] = pluvio_counter
+                    #                                     pluvio_counter += 1
+
+                    #                                     pluvio_lst.append(pluvio_df)
+                    #                                 elif (
+                    #                                     param_selector_post
+                    #                                     == "Evapotranspiration"
+                    #                                 ):
+                    #                                     pluvio_lst.append(pluvio_df)
+                    #                                 else:
+                    #                                     pluvio_df[
+                    #                                         "precipitation_filled"
+                    #                                     ] = [np.nan] * pluvio_df.shape[
+                    #                                         0
+                    #                                     ]
+                    #                                     pluvio_lst.append(pluvio_df)
+
+                    #                             pluvio_df_temp = pd.concat(pluvio_lst)
+                    #                             pluvio_df = (
+                    #                                 pluvio_df_temp.drop_duplicates(
+                    #                                     subset=[
+                    #                                         pluvio_df_temp.columns[0]
+                    #                                     ]
+                    #                                 )
+                    #                             )
+
+                    #                     except Exception:
+                    #                         pass
+
+                    #                 else:
+                    #                     st.write("Select date range")
+
+                    #                     winter_from_col, winter_to_col = st.columns(2)
+
+                    #                     with winter_from_col:
+                    #                         from_date_start = data[
+                    #                             data.columns[0]
+                    #                         ].tolist()[0]
+
+                    #                         # From date
+                    #                         winter_date_from = st.date_input(
+                    #                             "From",
+                    #                             from_date_start,
+                    #                             from_date_start,
+                    #                             data[data.columns[0]].tolist()[-1],
+                    #                             key="winter_date_from",
+                    #                         )
+
+                    #                         # From time
+                    #                         winter_time_from = st.time_input(
+                    #                             "To",
+                    #                             datetime.datetime.strptime(
+                    #                                 "00:00:00", "%H:%M:%S"
+                    #                             ).time(),
+                    #                             key="winter_time_from",
+                    #                             label_visibility="hidden",
+                    #                         )
+
+                    #                         from_winter = datetime.datetime.combine(
+                    #                             winter_date_from, winter_time_from
+                    #                         )
+
+                    #                     with winter_to_col:
+                    #                         to_date_start = data[
+                    #                             data[data.columns[0]] >= from_winter
+                    #                         ][data.columns[0]].tolist()[0]
+
+                    #                         winter_date_to = st.date_input(
+                    #                             "To",
+                    #                             to_date_start,
+                    #                             to_date_start,
+                    #                             data[data.columns[0]].tolist()[-1],
+                    #                             key="winter_date_to",
+                    #                         )
+
+                    #                         # From time
+                    #                         winter_time_to = st.time_input(
+                    #                             "To",
+                    #                             to_date_start.time(),
+                    #                             key="winter_time_to",
+                    #                             label_visibility="hidden",
+                    #                         )
+
+                    #                         to_winter = datetime.datetime.combine(
+                    #                             winter_date_to, winter_time_to
+                    #                         )
+
+                    #                     if from_winter > to_winter:
+                    #                         st.error(
+                    #                             "The selected date range is not valid."
+                    #                         )
+                    #                         st.stop()
+
+                    #                     show_preview = st.checkbox("Show fill preview")
+                    #                     close_gaps = False
+
+                    #                     pluvio_df = ec_data[
+                    #                         (ec_data[ec_data.columns[0]] >= from_winter)
+                    #                         & (ec_data[ec_data.columns[0]] <= to_winter)
+                    #                     ]
+
+                    #                     # If precipitation is selected, apply regression model
+                    #                     if (
+                    #                         param_selector_post == "Precipitation"
+                    #                         and not pluvio_df.shape[0]
+                    #                         >= (
+                    #                             data_day[col_selector_post].shape[0] - 1
+                    #                         )
+                    #                     ):
+                    #                         model = sm.OLS(
+                    #                             data_day[
+                    #                                 ~data_day[data_day.columns[0]].isin(
+                    #                                     pluvio_df[
+                    #                                         pluvio_df.columns[0]
+                    #                                     ].tolist()
+                    #                                 )
+                    #                             ][col_selector_post].values.reshape(
+                    #                                 -1, 1
+                    #                             ),
+                    #                             sm.add_constant(
+                    #                                 ec_data[
+                    #                                     ~ec_data[
+                    #                                         ec_data.columns[0]
+                    #                                     ].isin(
+                    #                                         pluvio_df[
+                    #                                             pluvio_df.columns[0]
+                    #                                         ].tolist()
+                    #                                     )
+                    #                                 ]["precipitation"].values.reshape(
+                    #                                     -1, 1
+                    #                                 )
+                    #                             ),
+                    #                             missing="drop",
+                    #                         )
+                    #                         lm = model.fit()
+                    #                         # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
+                    #                         if len(lm.params) == 1:
+                    #                             lm.params = np.concatenate(
+                    #                                 [np.array([0.0]), lm.params]
+                    #                             )
+
+                    #                         pluvio_fill_values = (
+                    #                             lm.params[0]
+                    #                             + lm.params[1]
+                    #                             * pluvio_df["precipitation"]
+                    #                         )
+
+                    #                         pluvio_df["precipitation_filled"] = (
+                    #                             pluvio_fill_values
+                    #                         )
+                    #                     else:
+                    #                         pluvio_df["precipitation_filled"] = [
+                    #                             np.nan
+                    #                         ] * pluvio_df.shape[0]
+
+                    #                 if (
+                    #                     show_preview
+                    #                     and not winter_type_selector == "albedo"
+                    #                 ):  # TODO: change when method implemented
+                    #                     # if downsample_data and pluvio_df.shape[0] > 0:
+                    #                     #     pluvio_df_plot = (
+                    #                     #         pluvio_df.resample(
+                    #                     #             "H", on=pluvio_df.columns[0]
+                    #                     #         )
+                    #                     #         .mean()
+                    #                     #         .reset_index()
+                    #                     #     )
+                    #                     # else:
+                    #                     pluvio_df_plot = pluvio_df
+
+                    #                     fig_pluvio = go.Figure(
+                    #                         layout=go.Layout(
+                    #                             height=450, title="Fill Preview"
+                    #                         )
+                    #                     )
+                    #                     if (
+                    #                         close_gaps
+                    #                         and winter_type_selector == "albedo"
+                    #                     ):
+                    #                         if param_selector_post == "Precipitation":
+                    #                             fig_pluvio.add_scatter(
+                    #                                 x=pluvio_df_plot[
+                    #                                     pluvio_df_plot.columns[0]
+                    #                                 ],
+                    #                                 y=pluvio_df_plot[
+                    #                                     "precipitation_filled"
+                    #                                 ],
+                    #                                 name="replaced",
+                    #                                 mode="markers+lines",
+                    #                                 marker=dict(size=2, color="red"),
+                    #                             )
+                    #                         else:
+                    #                             fig_pluvio.add_scatter(
+                    #                                 x=pluvio_df_plot[
+                    #                                     pluvio_df_plot.columns[0]
+                    #                                 ],
+                    #                                 y=pluvio_df_plot["eto"],
+                    #                                 name="replaced",
+                    #                                 mode="markers+lines",
+                    #                                 marker=dict(size=2, color="green"),
+                    #                             )
+
+                    #                     elif (
+                    #                         not close_gaps
+                    #                         and winter_type_selector == "albedo"
+                    #                     ):
+                    #                         show_legend = True
+                    #                         scatter_groups = pluvio_df.groupby(
+                    #                             [f"{param_selector_post}_groups"]
+                    #                         )
+                    #                         for name, group in scatter_groups:
+                    #                             group_plot = group
+
+                    #                             # if downsample_data and group.shape[0] > 0:
+                    #                             #     group_plot = (
+                    #                             #         group.resample(
+                    #                             #             "H", on=group.columns[0]
+                    #                             #         )
+                    #                             #         .mean()
+                    #                             #         .reset_index()
+                    #                             #     )
+
+                    #                             if (
+                    #                                 param_selector_post
+                    #                                 == "Precipitation"
+                    #                             ):
+                    #                                 fig_pluvio.add_scatter(
+                    #                                     x=group_plot[
+                    #                                         group_plot.columns[0]
+                    #                                     ],
+                    #                                     y=group_plot[
+                    #                                         f"precipitation_filled"
+                    #                                     ],
+                    #                                     name="replaced",
+                    #                                     mode="markers+lines",
+                    #                                     marker=dict(
+                    #                                         size=2, color="red"
+                    #                                     ),
+                    #                                     showlegend=show_legend,
+                    #                                 )
+                    #                                 if show_legend:
+                    #                                     show_legend = False
+                    #                             else:
+                    #                                 fig_pluvio.add_scatter(
+                    #                                     x=group_plot[
+                    #                                         group_plot.columns[0]
+                    #                                     ],
+                    #                                     y=group_plot["eto"],
+                    #                                     name="replaced",
+                    #                                     mode="markers+lines",
+                    #                                     marker=dict(
+                    #                                         size=2, color="green"
+                    #                                     ),
+                    #                                     showlegend=show_legend,
+                    #                                 )
+                    #                                 if show_legend:
+                    #                                     show_legend = False
+                    #                     else:
+                    #                         if param_selector_post == "Precipitation":
+                    #                             fig_pluvio.add_scatter(
+                    #                                 x=pluvio_df_plot[
+                    #                                     pluvio_df_plot.columns[0]
+                    #                                 ],
+                    #                                 y=pluvio_df_plot[
+                    #                                     "precipitation_filled"
+                    #                                 ],
+                    #                                 name="replaced",
+                    #                                 mode="markers+lines",
+                    #                                 marker=dict(size=2, color="red"),
+                    #                             )
+                    #                         else:
+                    #                             fig_pluvio.add_scatter(
+                    #                                 x=pluvio_df_plot[
+                    #                                     pluvio_df_plot.columns[0]
+                    #                                 ],
+                    #                                 y=pluvio_df_plot["eto"],
+                    #                                 name="replaced",
+                    #                                 mode="markers+lines",
+                    #                                 marker=dict(size=2, color="green"),
+                    #                             )
+
+                    #                     fig_pluvio.add_trace(
+                    #                         go.Scattergl(
+                    #                             x=data_day[data_day.columns[0]],
+                    #                             y=data_day[col_selector_post],
+                    #                             name="original",
+                    #                             mode="markers+lines",
+                    #                             marker=dict(size=2, color="#4574ba"),
+                    #                         )
+                    #                     )
+                    #                     st.plotly_chart(
+                    #                         fig_pluvio,
+                    #                         use_container_width=True,
+                    #                         **{"config": config},
+                    #                     )
+
+                    #                     lm_x = ec_data[
+                    #                         ~ec_data[ec_data.columns[0]].isin(
+                    #                             pluvio_df[pluvio_df.columns[0]].tolist()
+                    #                         )
+                    #                     ]
+
+                    #                     lm_y = data_day[
+                    #                         ~data_day[data_day.columns[0]].isin(
+                    #                             pluvio_df[pluvio_df.columns[0]].tolist()
+                    #                         )
+                    #                     ]
+
+                    #                     if (
+                    #                         param_selector_post == "Precipitation"
+                    #                         and lm_x.shape[0] > 1
+                    #                     ):
+                    #                         # if downsample_data and lm_x.shape[0] > 0:
+                    #                         #     lm_y = (
+                    #                         #         lm_y.resample("H", on=lm_y.columns[0])
+                    #                         #         .mean()
+                    #                         #         .reset_index()
+                    #                         #     )
+                    #                         #     lm_x = (
+                    #                         #         lm_x.resample("H", on=lm_x.columns[0])
+                    #                         #         .mean()
+                    #                         #         .reset_index()
+                    #                         #     )
+
+                    #                         fig_lm = px.scatter(
+                    #                             x=lm_x["precipitation"],
+                    #                             y=lm_y[col_selector_post],
+                    #                             trendline="ols",
+                    #                             color_discrete_sequence=["red"],
+                    #                             title=f"Used Linear Regression Between Pluvio and Lysimeter {lysimeter_selector_post} Data",
+                    #                             labels={
+                    #                                 "x": "Pluvio Precipitation",
+                    #                                 "y": f"Lysimeter {lysimeter_selector_post} Precipitation",
+                    #                             },
+                    #                             render_mode="webgl",
+                    #                         )
+                    #                         st.plotly_chart(
+                    #                             fig_lm,
+                    #                             use_container_width=True,
+                    #                             **{"config": config},
+                    #                         )
+                    #                     elif param_selector_post == "Precipitation":
+                    #                         st.error(
+                    #                             "There is no data for the regression model! This may be due to the fact that at least two days that are not within the winter period are needed for the regression model."
+                    #                         )
+
+                    #                 if st.button(
+                    #                     "Fill",
+                    #                     type="primary",
+                    #                     key="albedo_post",
+                    #                     disabled=(winter_type_selector == "albedo"),
+                    #                 ):  # TODO: change when method implemented
+                    #                     post_fill_winter(
+                    #                         pluvio_df,
+                    #                         param_selector_post,
+                    #                         post_lysi_number,
+                    #                     )
+                    # except Exception:
+                    #     st.error(
+                    #         "Some error occured during the winter filling! May be caused by problems with fetching the data."
+                    #     )
 
                 if base_toolbox or balance_toolbox:
                     # Interpolate Remaining NAs
@@ -5563,6 +5601,130 @@ try:
                     ):
                         undo_last_action(post_lysi_number)
 
+                if flag_toolbox:
+                    flag_container = st.container()
+
+                    with flag_container:
+                        st.subheader("Flag Bad Values", divider="red")
+
+                        st.write("Select date range")
+                        flag_col1, flag_col2 = st.columns(2)
+
+                        with flag_col1:
+
+                            from_date_start = data[data.columns[0]].tolist()[0]
+
+                            # From date
+                            flag_date_from = st.date_input(
+                                "From",
+                                from_date_start,
+                                from_date_start,
+                                data[data.columns[0]].tolist()[-1],
+                                key="flag_date_from",
+                            )
+
+                            # From time
+                            flag_time_from = st.time_input(
+                                "To",
+                                datetime.datetime.strptime(
+                                    "00:00:00", "%H:%M:%S"
+                                ).time(),
+                                key="flag_time_from",
+                                label_visibility="hidden",
+                                step=time_step,
+                            )
+
+                            flag_range_from = datetime.datetime.combine(
+                                flag_date_from, flag_time_from
+                            )
+
+                        with flag_col2:
+                            to_date_start = data[
+                                data[data.columns[0]] >= flag_range_from
+                            ][data.columns[0]].tolist()[0]
+
+                            flag_date_to = st.date_input(
+                                "To",
+                                to_date_start,
+                                to_date_start,
+                                data[data.columns[0]].tolist()[-1],
+                                key="flag_date_to",
+                            )
+
+                            # From time
+                            flag_time_to = st.time_input(
+                                "To",
+                                to_date_start.time(),
+                                key="flag_time_to",
+                                label_visibility="hidden",
+                                step=time_step,
+                            )
+
+                            flag_range_to = datetime.datetime.combine(
+                                flag_date_to, flag_time_to
+                            )
+
+                        if flag_range_from > flag_range_to:
+                            st.error("The selected date range is not valid.")
+                            st.stop()
+
+                        # Check whether time range from and to is a 10 minute interval
+                        time_error_flag = (
+                            flag_range_from.minute % 10 != 0
+                            or flag_range_to.minute % 10 != 0
+                        ) and data_selector == "additional"
+
+                        if time_error_flag:
+                            st.write(
+                                ":red[The selected time range is not a 10 minute interval.]"
+                            )
+
+                        start_index = data.index[
+                            data[data.columns[0]] == flag_range_from
+                        ][0]
+                        end_index = data.index[data[data.columns[0]] == flag_range_to][
+                            0
+                        ]
+
+                        if f"{col_selector_post}_flag" in data.columns:
+                            flags_exist = any(
+                                [
+                                    not np.isnan(flag)
+                                    for flag in data.loc[
+                                        start_index:end_index,
+                                        f"{col_selector_post}_flag",
+                                    ].tolist()
+                                ]
+                            )
+                        else:
+                            flags_exist = False
+
+                        flag_btns_col1, flag_btns_col2, _ = st.columns(
+                            [0.1, 0.15, 0.75]
+                        )
+
+                        with flag_btns_col1:
+                            if st.button(
+                                "Flag",
+                                type="primary",
+                                key="flag_set_post",
+                                disabled=time_error_flag,
+                            ):
+                                post_set_flag(
+                                    data, start_index, end_index, post_lysi_number
+                                )
+
+                        with flag_btns_col2:
+                            if st.button(
+                                "Remove Flag",
+                                type="primary",
+                                key="flag_undo_post",
+                                disabled=time_error_flag,
+                            ):
+                                post_undo_flag(
+                                    data, start_index, end_index, post_lysi_number
+                                )
+
                 with fig_post_spot:
                     if downsample_data and data.shape[0] > 0:
                         data_plot = (
@@ -5570,6 +5732,13 @@ try:
                         )
                     else:
                         data_plot = data
+
+                    if f"{col_selector_post}_flag" in data_plot.columns:
+                        flags_present = (
+                            data_plot[f"{col_selector_post}_flag"].dropna().shape[0] > 0
+                        )
+                    else:
+                        flags_present = False
 
                     # Lysimeter plot that shows the actual state of the data
                     fig_post = go.Figure(
@@ -5584,6 +5753,93 @@ try:
                         showlegend=False,
                         marker=dict(size=2, color="#4574ba"),
                     )
+
+                    if flags_present:
+
+                        fig_flags_grouped = (
+                            data[[data.columns[0], f"{col_selector_post}_flag"]]
+                            .dropna()
+                            .groupby([f"{col_selector_post}_flag"])
+                        )
+
+                        show_flag = True
+
+                        if data[col_selector_post].dropna().shape[0] == 0:
+                            ylim = [-10, 10]
+                        else:
+                            margin = (
+                                abs(
+                                    (
+                                        data[col_selector_post].max(skipna=True)
+                                        - data[col_selector_post].min(skipna=True)
+                                    )
+                                )
+                                * 0.15
+                            )
+                            ylim = [
+                                data[col_selector_post].min(skipna=True) - margin,
+                                data[col_selector_post].max(skipna=True) + margin,
+                            ]
+
+                        # Adapt ylim when one boundary is 0 at least
+                        if 0 in ylim:
+                            change_index = ylim.index(0)
+                            if change_index == 0:
+                                ylim[change_index] = -1 * margin
+                            else:
+                                ylim[change_index] = margin
+
+                        for name, group in fig_flags_grouped:
+
+                            if group.shape[0] == 1:
+                                fig_post.add_trace(
+                                    go.Scatter(
+                                        x=[
+                                            group.iloc[0, 0],
+                                            group.iloc[0, 0],
+                                        ],
+                                        y=ylim,
+                                        mode="lines",
+                                        line=dict(color="#3abd68"),
+                                        legendgroup="1",
+                                        name="flagged",
+                                        showlegend=show_flag,
+                                        opacity=0.5,
+                                    )
+                                )
+                                if show_flag:
+                                    show_flag = False
+                            else:
+                                fig_post.add_vrect(
+                                    x0=group.iloc[0, 0],
+                                    x1=group.iloc[(group.shape[0] - 1), 0],
+                                    fillcolor="#3abd68",
+                                    opacity=0.25,
+                                    line_width=0,
+                                )
+
+                                for x in [
+                                    group.iloc[0, 0],
+                                    group.iloc[(group.shape[0] - 1), 0],
+                                ]:
+                                    fig_post.add_trace(
+                                        go.Scatter(
+                                            x=[
+                                                x,
+                                                x,
+                                            ],
+                                            y=ylim,
+                                            mode="lines",
+                                            line=dict(color="#3abd68"),
+                                            legendgroup="1",
+                                            name="flagged",
+                                            showlegend=show_flag,
+                                            opacity=0.5,
+                                        )
+                                    )
+
+                                    if show_flag:
+                                        show_flag = False
 
                     st.plotly_chart(
                         fig_post, use_container_width=True, **{"config": config}

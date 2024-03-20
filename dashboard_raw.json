@@ -28,12 +28,121 @@
         "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
       },
       "gridPos": {
-        "h": 2,
+        "h": 5,
         "w": 24,
         "x": 0,
         "y": 0
       },
       "id": 23,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "<p></p>\n<h1>Water Tank & Pumping Rate Errors ${location}</h1>\n\n<p>0 = no error </br> 1 = water tank weight increase but no overall positive pumping rate </br> 2 = water tank weight decrease but no overall negative pumping rate </br> 3 = tank weight stagnation even though negative or positive pumping rate</p>",
+        "mode": "markdown"
+      },
+      "pluginVersion": "9.5.2",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "fillOpacity": 70,
+            "lineWidth": 1
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "color": "red",
+                  "index": 1
+                },
+                "2": {
+                  "color": "orange",
+                  "index": 2
+                },
+                "3": {
+                  "color": "blue",
+                  "index": 3
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 24,
+      "options": {
+        "colWidth": 0.9,
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "rowHeight": 0.9,
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+          },
+          "query": "import \"join\"\nimport \"strings\"\nimport \"date\"\n\npumpRate = from(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"raw\")\n  |> filter(fn: (r) => r[\"_field\"] =~ /^L_[1-6]_PUC_S_NEG/ or r[\"_field\"] =~ /^L_[1-6]_PUC_S_POS/)\n  |> filter(fn: (r) => r[\"location\"] == \"${location}\")\n  |> filter(fn: (r) => r[\"schedule\"] == \"H\")\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\n  |> map(fn: (r) => ({r with lysi: strings.substring(v: r._field, start:2, end:3)}))\n  |> map(fn: (r) => ({r with _field: if r[\"_field\"] =~  /^L_[1-6]_PUC_S_NEG/ then \"rate_neg\" else \"rate_pos\"}))\n  |> sort(columns: [\"_time\"])\n  |> keep(columns: [\"_field\",\"_value\",\"_time\",\"location\",\"lysi\"])\n  |> pivot(rowKey: [\"_time\",\"location\",\"lysi\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n\nwaterWeight = from(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"raw\")\n  |> filter(fn: (r) => r[\"_field\"] =~ /^L_[1-6]_WAG_D_000$/)\n  |> filter(fn: (r) => r[\"location\"] == \"${location}\")\n  |> filter(fn: (r) => r[\"schedule\"] == \"I\")\n  |> map(fn: (r) => ({r with lysi: strings.substring(v: r._field, start:2, end:3)}))\n  |> map(fn: (r) => ({r with _field: \"weight\"}))\n  |> group(columns: [\"lysi\"])\n  |> difference(columns: [\"_value\"], keepFirst: true, initialZero: true)\n  |> group(columns: [\"location\",\"lysi\",\"_field\"])\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\n  |> sort(columns: [\"_time\"])\n  |> keep(columns: [\"_field\",\"_value\",\"_time\",\"location\",\"lysi\"])\n  |> pivot(rowKey: [\"_time\",\"location\",\"lysi\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group(columns: [\"location\"])\n\njoin.left(\n    left: pumpRate, \n    right: waterWeight, \n    on: (l, r) => l._time == r._time and l.lysi == r.lysi,\n    as: (l, r) => ({l with weight: r.weight})\n)\n|> map(fn: (r) => ({r with Lysimeter: if r.weight>0 and (r.rate_neg-r.rate_pos)<=0 then 1 \n                    else if r.weight<0 and (r.rate_pos-r.rate_neg)<=0 then 2 \n                    else if (r.weight >= -0.05 and r.weight <= 0.05) and (r.rate_pos >= 0.05 or r.rate_neg >= 0.05) then 3\n                    else 0}))\n|> drop(columns: [\"rate_pos\",\"rate_neg\",\"weight\",\"location\"])\n|> group(columns: [\"lysi\"])\n|> timeShift(duration: -1439m)\n//|> map(fn: (r) => ({r with date_str: \"${date.year(t:r._time)}-${if strings.strlen(v: string(v: date.month(t: r._time))) < 2 then \"0${date.month(t: r._time)}\" else string(v: date.month(t: r._time))}-${if strings.strlen(v: string(v: date.monthDay(t: r._time))) < 2 then \"0${date.month(t: r._time)}\" else string(v: date.monthDay(t: r._time))}\"}))\n\n",
+          "refId": "A"
+        }
+      ],
+      "transformations": [],
+      "type": "status-history"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "id": 25,
       "options": {
         "code": {
           "language": "plaintext",
@@ -145,7 +254,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 2
+        "y": 15
       },
       "id": 22,
       "options": {
@@ -161,12 +270,7 @@
         },
         "frameIndex": 3,
         "showHeader": true,
-        "sortBy": [
-          {
-            "desc": false,
-            "displayName": "date"
-          }
-        ]
+        "sortBy": []
       },
       "pluginVersion": "9.5.2",
       "targets": [
@@ -175,7 +279,7 @@
             "type": "influxdb",
             "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
           },
-          "query": "import \"date\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"flags\")\n  |> filter(fn: (r) => r[\"location\"] == \"${location}\")\n  |> map(fn: (r) => ({r with code: r._value}))\n  |> group(columns: [\"_field\",\"schedule\",\"code\"])\n  |> aggregateWindow(every: 1d, fn: count, column: \"_value\")\n  |> filter(fn: (r) => r._value > 0)\n  |> map(fn: (r) => ({r with code_ng: r.code}))\n  |> map(fn: (r) => ({r with _field_ng: r._field}))\n  |> map(fn: (r) => ({r with schedule_ng: r.schedule}))\n  |> map(fn: (r) => ({r with _time: date.sub(from: r._time, d: 1d)}))\n  //|> map(fn: (r) => ({r with _time: \"${date.year(t:r._time)}-${date.month(t:r._time)}-${date.monthDay(t:r._time)}\"}))\n  |> drop(columns: [\"schedule\",\"_field\",\"code\"])\n  |> map(fn: (r) => ({r with _field: r._field_ng}))\n  |> drop(columns: [\"_field_ng\"])\n\n\n",
+          "query": "import \"date\"\nimport \"strings\"\n\nfrom(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"flags\")\n  |> filter(fn: (r) => r[\"location\"] == \"${location}\")\n  |> map(fn: (r) => ({r with code: r._value}))\n  |> group(columns: [\"_field\",\"schedule\",\"code\"])\n  |> aggregateWindow(every: 1d, fn: count, column: \"_value\")\n  |> timeShift(duration: 1m)\n  |> filter(fn: (r) => r._value > 0)\n  |> map(fn: (r) => ({r with code_ng: r.code}))\n  |> map(fn: (r) => ({r with _field_ng: r._field}))\n  |> map(fn: (r) => ({r with schedule_ng: r.schedule}))\n  |> map(fn: (r) => ({r with _time: date.sub(from: r._time, d: 1d)}))\n  //|> map(fn: (r) => ({r with _time: \"${date.year(t:r._time)}-${date.month(t:r._time)}-${date.monthDay(t:r._time)}\"}))\n  |> map(fn: (r) => ({r with _time: \"${date.year(t:r._time)}-${if strings.strlen(v: string(v: date.month(t: r._time))) < 2 then \"0${date.month(t: r._time)}\" else string(v: date.month(t: r._time))}-${if strings.strlen(v: string(v: date.monthDay(t: r._time))) < 2 then \"0${date.month(t: r._time)}\" else string(v: date.monthDay(t: r._time))}\"}))\n  |> drop(columns: [\"schedule\",\"_field\",\"code\"])\n  |> map(fn: (r) => ({r with _field: r._field_ng}))\n  |> drop(columns: [\"_field_ng\"])\n\n\n",
           "refId": "A"
         }
       ],
@@ -235,7 +339,7 @@
         "h": 2,
         "w": 24,
         "x": 0,
-        "y": 10
+        "y": 23
       },
       "id": 15,
       "options": {
@@ -311,7 +415,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 12
+        "y": 25
       },
       "id": 16,
       "options": {
@@ -352,7 +456,7 @@
         "h": 2,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 35
       },
       "id": 5,
       "options": {
@@ -424,13 +528,38 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "L_1_TDR_W_050 H"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 37
       },
       "id": 1,
       "options": {
@@ -522,7 +651,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 24
+        "y": 37
       },
       "id": 2,
       "options": {
@@ -614,7 +743,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 33
+        "y": 46
       },
       "id": 3,
       "options": {
@@ -706,7 +835,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 33
+        "y": 46
       },
       "id": 4,
       "options": {
@@ -798,7 +927,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 41
+        "y": 54
       },
       "id": 6,
       "options": {
@@ -890,7 +1019,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 41
+        "y": 54
       },
       "id": 9,
       "options": {
@@ -930,7 +1059,7 @@
         "h": 2,
         "w": 24,
         "x": 0,
-        "y": 49
+        "y": 62
       },
       "id": 8,
       "options": {
@@ -1007,7 +1136,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 51
+        "y": 64
       },
       "id": 7,
       "options": {
@@ -1099,7 +1228,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 51
+        "y": 64
       },
       "id": 10,
       "options": {
@@ -1191,7 +1320,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 59
+        "y": 72
       },
       "id": 11,
       "options": {
@@ -1283,7 +1412,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 72
       },
       "id": 12,
       "options": {
@@ -1375,7 +1504,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 67
+        "y": 80
       },
       "id": 13,
       "options": {
@@ -1467,7 +1596,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 67
+        "y": 80
       },
       "id": 14,
       "options": {
@@ -1507,7 +1636,7 @@
         "h": 2,
         "w": 24,
         "x": 0,
-        "y": 75
+        "y": 88
       },
       "id": 17,
       "options": {
@@ -1578,13 +1707,39 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "L_2_PUC_S_NEG",
+                  "L_2_PUC_S_POS"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 77
+        "y": 90
       },
       "id": 18,
       "options": {
@@ -1611,7 +1766,7 @@
             "type": "influxdb",
             "uid": "ed40cf61-3f04-431a-956d-4303e49ef942"
           },
-          "query": "from(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"raw\")\n  |> filter(fn: (r) => r[\"_field\"] =~ /^L_[1-6]_PUC_S_NEG/ or r[\"_field\"] =~ /^L_[1-6]_PUC_S_POS/)\n  |> filter(fn: (r) => r[\"location\"] == \"${location}\")\n  |> filter(fn: (r) => r[\"schedule\"] == \"H\")\n  |> map(fn: (r) => ({r with _value: if r[\"_field\"] ==  \"L_1_PUC_S_NEG\" then -1.0*r[\"_value\"] else r[\"_value\"]}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"mean\")",
+          "query": "from(bucket: \"lysimeter\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"raw\")\n  |> filter(fn: (r) => r[\"_field\"] =~ /^L_[1-6]_PUC_S_NEG/ or r[\"_field\"] =~ /^L_[1-6]_PUC_S_POS/)\n  |> filter(fn: (r) => r[\"location\"] == \"${location}\")\n  |> filter(fn: (r) => r[\"schedule\"] == \"H\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({r with _value: if r[\"_field\"] =~  /^L_[1-6]_PUC_S_NEG/ then -1.0*r[\"_value\"] else r[\"_value\"]}))",
           "refId": "A"
         }
       ],
@@ -1635,7 +1790,7 @@
         "h": 2,
         "w": 24,
         "x": 0,
-        "y": 87
+        "y": 100
       },
       "id": 19,
       "options": {
@@ -1714,7 +1869,7 @@
               "options": {
                 "mode": "exclude",
                 "names": [
-                  "L_1_WAG_D_000"
+                  "L_2_WAG_D_000"
                 ],
                 "prefix": "All except:",
                 "readOnly": true
@@ -1737,7 +1892,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 89
+        "y": 102
       },
       "id": 20,
       "options": {
@@ -1832,13 +1987,38 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "L_1_WAG_L_000"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 99
+        "y": 112
       },
       "id": 21,
       "options": {
@@ -1937,13 +2117,13 @@
     ]
   },
   "time": {
-    "from": "2020-12-31T22:00:00.000Z",
-    "to": "2023-12-31T21:59:59.000Z"
+    "from": "2022-05-12T00:00:00.000Z",
+    "to": "2022-05-15T23:59:59.000Z"
   },
   "timepicker": {},
-  "timezone": "",
+  "timezone": "utc",
   "title": "Lysimeter Raw",
   "uid": "d11a4ac6-a651-43ea-a974-1428d256623e",
-  "version": 42,
+  "version": 60,
   "weekStart": ""
 }

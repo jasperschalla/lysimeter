@@ -27,31 +27,12 @@ import json
 import datetime
 import matplotlib.pyplot as plt
 import sys
-from scipy.stats import iqr
 
 # Given arguments by bash script
 filepath = sys.argv[1]
 # Filename without file extension
 filename = filepath.split("/")[-1]
 location = sys.argv[2]
-
-
-# # Fitler outliers by inter quartile range for all components except water tank weights
-# def filter_outliers(df, param_values, param):
-#     inter_quartile_range = iqr(param_values, axis=0)
-#     q1 = np.percentile(param_values, 25, axis=0)
-#     q3 = np.percentile(param_values, 75, axis=0)
-
-#     lower_thresh = q1 - 1.5 * inter_quartile_range
-#     upper_thresh = q3 + 1.5 * inter_quartile_range
-
-#     df.loc[:, param] = np.where(
-#         (df[param] > upper_thresh) | (df[param] < lower_thresh),
-#         np.nan,
-#         df[param],
-#     )
-
-#     return df
 
 
 # Open configuration which gives each lysimeter a partner lysimeter that can be used to derived gap filling data
@@ -91,6 +72,10 @@ df_i_lst = []
 if not df_sheets["G"].iloc[0, 0] == filename_date:
     filename_date_formatted = df_sheets["G"].iloc[0, 0].strftime("%Y_%m_%d")
 
+
+# 1. Clean file dates for each lysimeter and put them in a list
+####################################################################################################
+
 # Loop over 6 lysimeters for this hexagon to separate data for each lysimeter in different list item
 for index in range(6):
     lysimeter_number = index + 1
@@ -113,7 +98,10 @@ for index in range(6):
     df_h_temp.iloc[:, 0] = df_h_temp.iloc[:, 0].astype("datetime64[ns]")
     df_h_lst.append(df_h_temp)
 
-# Loop over the list where each lysimeter has own item
+
+# 2. Apply chamber mesasurment correction for each lysimeter before filling gaps (cleaned data needed for that)
+################################################################################################################
+
 for lysimeter_index in range(len(df_h_lst)):
     lysimeter_number = lysimeter_index + 1
 
@@ -144,8 +132,7 @@ for lysimeter_index in range(len(df_h_lst)):
             ),
         )[df_weights.columns]
         df_previous.iloc[:, 0] = df_previous.iloc[:, 0].astype("datetime64[ns]")
-        df_weights = pd.concat([df_previous, df_weights])
-        df_weights = df_weights.reset_index(drop=True)
+        df_weights = pd.concat([df_previous, df_weights]).reset_index(drop=True)
 
     # When no previous date exists, do some extra checks whether there is a strong decline or not finished inclince
     # (also hard to detect withouth previous file) in the first 15 time periods
@@ -193,10 +180,13 @@ for lysimeter_index in range(len(df_h_lst)):
         date_start_index
     ].reset_index(drop=True)
 
+
+# 3. Do gap filling for each lysimeter and each parameter
+################################################################################################################
+
+
 for lysimeter_index in range(len(df_h_lst)):
     lysimeter_number = lysimeter_index + 1
-    # Gap filling --> gaps = 1 timestep filled by linear interpolation, multi gaps filled by regression model with partner lysimeter
-    ############################################################################################################
 
     # Loop over schedules with respective output folders and list items
     for schedule in ["H", "I"]:
@@ -230,45 +220,28 @@ for lysimeter_index in range(len(df_h_lst)):
                 (lysimeter_matches[location_summary][str(lysimeter_number)] - 1)
             ]
 
-            if folder == "balance" and re.match(".*WAG_D_000.*", param):
+            # 3.1 Plausibility check
+            ############################################################################################################
+
+            # Criteria whether that param should be checked for plausibility
+            water_weight_criteria_plausibility = folder == "balance" and re.match(
+                ".*WAG_D_000.*", param
+            )
+            lysi_weight_criteria_plausibility = folder == "balance" and re.match(
+                ".*WAG_L_000.*", param
+            )
+
+            # Check for plausibility with plausibility thresholds for respective parameter and flag values that are not plausible
+            if water_weight_criteria_plausibility:
                 df.loc[:, param] = np.where(
                     (df[param] >= 55) | (df[param] < 0), np.nan, df[param]
                 )
-            elif folder == "balance" and re.match(".*WAG_L_000.*", param):
+            elif lysi_weight_criteria_plausibility:
                 df.loc[:, param] = np.where(
                     (df[param] >= 3600) | (df[param] <= 2400), np.nan, df[param]
                 )
-            # elif (
-            #     df[param].dropna().shape[0] > 0
-            #     and partner_lysimeter[partner_param].dropna().shape[0] > 0
-            # ):
-            #     param_values = df[param].dropna().to_numpy()
-            #     df = filter_outliers(df, param_values, param)
 
-            #     partner_param_values = (
-            #         partner_lysimeter[partner_param].dropna().to_numpy()
-            #     )
-            #     partner_df_filtered = filter_outliers(
-            #         partner_lysimeter, partner_param_values, partner_param
-            #     )
-            #     df_all[
-            #         (lysimeter_matches[location_summary][str(lysimeter_number)] - 1)
-            #     ] = partner_df_filtered
-
-            #     if re.match(".*WAG_L_000.*", param):
-            #         df.loc[:, param] = np.where(
-            #             (df[param] >= 4000) | (df[param] <= 2000), np.nan, df[param]
-            #         )
-            #         df_all[
-            #             (lysimeter_matches[location_summary][str(lysimeter_number)] - 1)
-            #         ].loc[:, partner_param] = np.where(
-            #             (partner_df_filtered[partner_param] >= 4000)
-            #             | (partner_df_filtered[partner_param] <= 2000),
-            #             np.nan,
-            #             partner_df_filtered[partner_param],
-            #         )
-
-            # Multi gaps
+            # 3.2 Identify and Fill gaps
             ############################################################################################################
 
             # Check how big a single time step is
@@ -277,7 +250,7 @@ for lysimeter_index in range(len(df_h_lst)):
 
             # Data where value and next value is NA
             multi_gaps_timestamp = df[
-                df[param].isna() & df[param].shift(periods=-1).isna()
+                df[param].isna()  ## & df[param].shift(periods=-1).isna()
             ][[date_col, param]]
 
             # Group timesteps where sequential gaps exist into groups with start date but open end (yet)
@@ -311,6 +284,29 @@ for lysimeter_index in range(len(df_h_lst)):
                 # Extracted group with multi-timestep gaps
                 prec_df = prec_df.iloc[0:stop_index, :]
 
+                # Length of subsequent gap
+                gap_length = prec_df.shape[0]
+
+                # Criteria whether that param should be interpolated or regressed with partner lysimeter
+                lysi_weight_criteria_interpolate = (
+                    folder == "balance"
+                    and re.match(".*WAG_L_000.*", param)
+                    and gap_length <= 30
+                )
+                water_weight_criteria_interpolate = folder == "balance" and re.match(
+                    ".*WAG_D_000.*", param
+                )
+
+                # Check if gap length in combination with param leads to regression or interpolation
+                if (
+                    lysi_weight_criteria_interpolate
+                    or water_weight_criteria_interpolate
+                ):
+                    interpolate = True
+                else:
+                    interpolate = False
+
+                # Check if missing value is edge value
                 not_edge = (
                     prec_df.loc[prec_df.index[0], "Timestamp"] != df.loc[0, "Timestamp"]
                 ) and (
@@ -320,10 +316,9 @@ for lysimeter_index in range(len(df_h_lst)):
                     )
                 )
 
-                if (
-                    folder == "balance"
-                    and re.match(".*WAG_D_000.*", param)
-                    and not_edge
+                # Check whether there are values at the both edges of the gap
+                if (lysi_weight_criteria_interpolate and not_edge) or (
+                    water_weight_criteria_interpolate and not_edge
                 ):
                     prec_df_interpol = prec_df_interpol.iloc[0 : (stop_index + 2), :]
                     not_na = (
@@ -338,11 +333,9 @@ for lysimeter_index in range(len(df_h_lst)):
                 else:
                     not_na = False
 
-                if (
-                    folder == "balance"
-                    and re.match(".*WAG_D_000.*", param)
-                    and not_edge
-                    and not_na
+                # Combine whether interpolation (in case it is possible) or regression is applied
+                if (water_weight_criteria_interpolate and not_edge and not_na) or (
+                    lysi_weight_criteria_interpolate and not_edge and not_na
                 ):
                     result_values = (
                         prec_df_interpol.loc[:, param]
@@ -419,9 +412,9 @@ for lysimeter_index in range(len(df_h_lst)):
                     if stop_index > 1:
                         temp_df_dates = temp_df.iloc[:stop_index][date_col].tolist()
                         original_indices = df.index[df[date_col].isin(temp_df_dates)]
-                        df.loc[
-                            original_indices, f"fill_{param.lower()}_na_groups"
-                        ] = na_group_counter
+                        df.loc[original_indices, f"fill_{param.lower()}_na_groups"] = (
+                            na_group_counter
+                        )
                         na_group_counter += 1
 
                 # Get row indices where multi flagging has been applied
@@ -447,167 +440,167 @@ for lysimeter_index in range(len(df_h_lst)):
                 ]
                 row_na_indices = [i[0] for i in na_indicators]
 
-                if (
-                    folder == "balance"
-                    and re.match(".*WAG_D_000.*", param)
-                    and not_edge
-                    and not_na
+                # Flag values depending on filling method and whether it was successful or not
+                if (water_weight_criteria_interpolate and not_edge and not_na) or (
+                    lysi_weight_criteria_interpolate and not_edge and not_na
                 ):
                     df.loc[row_clean_indices, param] = result_clean_values
                     df.loc[row_clean_indices, f"fill_{param.lower()}_code"] = 1
-                    df.loc[
-                        row_clean_indices, f"fill_{param.lower()}_msg"
-                    ] = "linear interpolation"
-                    df.loc[
-                        row_clean_indices, f"fill_{param.lower()}_groups"
-                    ] = group_counter
+                    df.loc[row_clean_indices, f"fill_{param.lower()}_msg"] = (
+                        "linear interpolation"
+                    )
+                    df.loc[row_clean_indices, f"fill_{param.lower()}_groups"] = (
+                        group_counter
+                    )
                     group_counter += 1
 
-                    df.loc[row_na_indices, f"fill_{param.lower()}_code"] = -1
-                    df.loc[row_na_indices, f"fill_{param.lower()}_msg"] = "edge value"
+                    # Cannot be not interpolated since then regression is applied anyway
+                    # df.loc[row_na_indices, f"fill_{param.lower()}_code"] = -1
+                    # df.loc[row_na_indices, f"fill_{param.lower()}_msg"] = "edge value"
                 else:
-                    # Flag values
+                    # Flag values when regression was successfully applied
                     df.loc[row_clean_indices, param] = result_clean_values
                     df.loc[row_clean_indices, f"fill_{param.lower()}_code"] = 2
-                    df.loc[
-                        row_clean_indices, f"fill_{param.lower()}_msg"
-                    ] = f"lm with lysimeter {lysimeter_matches[location_summary][str(lysimeter_number)]}"
-                    df.loc[
-                        row_clean_indices, f"fill_{param.lower()}_groups"
-                    ] = group_counter
+                    df.loc[row_clean_indices, f"fill_{param.lower()}_msg"] = (
+                        f"lm with lysimeter {lysimeter_matches[location_summary][str(lysimeter_number)]}"
+                    )
+                    df.loc[row_clean_indices, f"fill_{param.lower()}_groups"] = (
+                        group_counter
+                    )
                     group_counter += 1
 
+                    # Flag values when regression was not successfully applied
                     df.loc[row_na_indices, f"fill_{param.lower()}_code"] = -2
-                    df.loc[
-                        row_na_indices, f"fill_{param.lower()}_msg"
-                    ] = f"lysimeter {lysimeter_matches[location_summary][str(lysimeter_number)]} is also NA"
+                    df.loc[row_na_indices, f"fill_{param.lower()}_msg"] = (
+                        f"lysimeter {lysimeter_matches[location_summary][str(lysimeter_number)]} is also NA"
+                    )
 
-            # Single gaps
-            ############################################################################################################
+            # # Single gaps
+            # ############################################################################################################
 
-            # Select rows where value is NA and next value is not
-            single_gaps_timestamp = df[
-                (
-                    df[param].isna()
-                    & df[param].shift().notna()
-                    & (~df[date_col].isin(multi_gaps_timestamp[date_col].tolist()))
-                )
-            ][[date_col, param]]
+            # # Select rows where value is NA and next value is not
+            # single_gaps_timestamp = df[
+            #     (
+            #         df[param].isna()
+            #         & df[param].shift().notna()
+            #         & (~df[date_col].isin(multi_gaps_timestamp[date_col].tolist()))
+            #     )
+            # ][[date_col, param]]
 
-            # Loop over these rows and interpolate by getting previous and next value as well
-            single_gap_dict = {}
-            for timestamp in single_gaps_timestamp[date_col].tolist():
-                index = df.index[df[date_col] == timestamp].tolist()[0]
+            # # Loop over these rows and interpolate by getting previous and next value as well
+            # single_gap_dict = {}
+            # for timestamp in single_gaps_timestamp[date_col].tolist():
+            #     index = df.index[df[date_col] == timestamp].tolist()[0]
 
-                if not index == 0 and not index == df.shape[0]:
-                    single_gap_dict[index] = (
-                        df[[param]]
-                        .iloc[[index - 1, index, index + 1], :]
-                        .interpolate(axis=0)
-                    ).iloc[1, 0]
+            #     if not index == 0 and not index == df.shape[0]:
+            #         single_gap_dict[index] = (
+            #             df[[param]]
+            #             .iloc[[index - 1, index, index + 1], :]
+            #             .interpolate(axis=0)
+            #         ).iloc[1, 0]
 
-            # Flag values where interpolation has been applied
-            for key in list(single_gap_dict.keys()):
-                df.loc[key, param] = single_gap_dict[key]
-                df.loc[key, f"fill_{param.lower()}_code"] = 1
-                df.loc[key, f"fill_{param.lower()}_msg"] = "linear interpolation"
-                df.loc[key, f"fill_{param.lower()}_na_groups"] = None
+            # # Flag values where interpolation has been applied
+            # for key in list(single_gap_dict.keys()):
+            #     df.loc[key, param] = single_gap_dict[key]
+            #     df.loc[key, f"fill_{param.lower()}_code"] = 1
+            #     df.loc[key, f"fill_{param.lower()}_msg"] = "linear interpolation"
+            #     df.loc[key, f"fill_{param.lower()}_na_groups"] = None
 
-            # In cases where a single value at either edge (start or finish) is missing linear interpolation cannot be applied
-            if np.isnan(df[param].loc[0]) or np.isnan(df[param].loc[df.shape[0] - 1]):
-                # Get current lysimeter values
-                current_lysimeter_values = df[param].values.reshape(-1, 1)
-                partner_lysimeter_values = partner_lysimeter[
-                    partner_param
-                ].values.reshape(-1, 1)
+            # # In cases where a single value at either edge (start or finish) is missing linear interpolation cannot be applied
+            # if np.isnan(df[param].loc[0]) or np.isnan(df[param].loc[df.shape[0] - 1]):
+            #     # Get current lysimeter values
+            #     current_lysimeter_values = df[param].values.reshape(-1, 1)
+            #     partner_lysimeter_values = partner_lysimeter[
+            #         partner_param
+            #     ].values.reshape(-1, 1)
 
-                ols_df = pd.DataFrame(
-                    {
-                        "partner": partner_lysimeter_values.flatten(),
-                        "current": current_lysimeter_values.flatten(),
-                    }
-                ).dropna()
+            #     ols_df = pd.DataFrame(
+            #         {
+            #             "partner": partner_lysimeter_values.flatten(),
+            #             "current": current_lysimeter_values.flatten(),
+            #         }
+            #     ).dropna()
 
-                # If first edge value is missing
-                if np.isnan(df[param].loc[0]):
-                    if np.isnan(partner_lysimeter[partner_param].loc[0]) or all(
-                        np.isnan(current_lysimeter_values)
-                    ):
-                        if df.loc[0, f"fill_{param.lower()}_code"] == None:
-                            df.loc[0, f"fill_{param.lower()}_code"] = -1
-                            df.loc[0, f"fill_{param.lower()}_msg"] = "edge value"
-                    else:
-                        # Linear regression model is created
-                        model = sm.OLS(
-                            ols_df["current"].values.reshape(-1, 1),
-                            sm.add_constant(ols_df["partner"].values.reshape(-1, 1)),
-                            missing="drop",
-                        )
-                        lm = model.fit()
-                        # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
-                        if len(lm.params) == 1:
-                            lm.params = np.concatenate([np.array([0.0]), lm.params])
-                        # Filling values are calculated by regression model
-                        result_value = (
-                            lm.params[0]
-                            + lm.params[1] * partner_lysimeter[partner_param].loc[0]
-                        )
-                        # Values are filled in and flagged
-                        df.loc[0, param] = result_value
-                        df.loc[0, f"fill_{param.lower()}_code"] = 2
-                        df.loc[
-                            0, f"fill_{param.lower()}_msg"
-                        ] = f"lm with lysimeter {lysimeter_matches[location_summary][str(lysimeter_number)]}"
-                        df.loc[0, f"fill_{param.lower()}_groups"] = group_counter
-                        group_counter += 1
+            #     # If first edge value is missing
+            #     if np.isnan(df[param].loc[0]):
+            #         if np.isnan(partner_lysimeter[partner_param].loc[0]) or all(
+            #             np.isnan(current_lysimeter_values)
+            #         ):
+            #             if df.loc[0, f"fill_{param.lower()}_code"] == None:
+            #                 df.loc[0, f"fill_{param.lower()}_code"] = -1
+            #                 df.loc[0, f"fill_{param.lower()}_msg"] = "edge value"
+            #         else:
+            #             # Linear regression model is created
+            #             model = sm.OLS(
+            #                 ols_df["current"].values.reshape(-1, 1),
+            #                 sm.add_constant(ols_df["partner"].values.reshape(-1, 1)),
+            #                 missing="drop",
+            #             )
+            #             lm = model.fit()
+            #             # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
+            #             if len(lm.params) == 1:
+            #                 lm.params = np.concatenate([np.array([0.0]), lm.params])
+            #             # Filling values are calculated by regression model
+            #             result_value = (
+            #                 lm.params[0]
+            #                 + lm.params[1] * partner_lysimeter[partner_param].loc[0]
+            #             )
+            #             # Values are filled in and flagged
+            #             df.loc[0, param] = result_value
+            #             df.loc[0, f"fill_{param.lower()}_code"] = 2
+            #             df.loc[0, f"fill_{param.lower()}_msg"] = (
+            #                 f"lm with lysimeter {lysimeter_matches[location_summary][str(lysimeter_number)]}"
+            #             )
+            #             df.loc[0, f"fill_{param.lower()}_groups"] = group_counter
+            #             group_counter += 1
 
-                # If first edge value is missing
-                if np.isnan(df[param].loc[df.shape[0] - 1]):
-                    # If partner lysimeter is missing the value for this timestep the filled value is also NA and is flagged
-                    if np.isnan(
-                        partner_lysimeter[partner_param].loc[
-                            partner_lysimeter.shape[0] - 1
-                        ]
-                    ) or all(np.isnan(current_lysimeter_values)):
-                        if (
-                            df.loc[df.shape[0] - 1, f"fill_{param.lower()}_code"]
-                            == None
-                        ):
-                            df.loc[(df.shape[0] - 1), f"fill_{param.lower()}_code"] = -1
-                            df.loc[
-                                (df.shape[0] - 1), f"fill_{param.lower()}_msg"
-                            ] = "edge value"
-                    else:
-                        # Linear regression model is created
-                        model = sm.OLS(
-                            ols_df["current"].values.reshape(-1, 1),
-                            sm.add_constant(ols_df["partner"].values.reshape(-1, 1)),
-                            missing="drop",
-                        )
-                        lm = model.fit()
+            #     # If first edge value is missing
+            #     if np.isnan(df[param].loc[df.shape[0] - 1]):
+            #         # If partner lysimeter is missing the value for this timestep the filled value is also NA and is flagged
+            #         if np.isnan(
+            #             partner_lysimeter[partner_param].loc[
+            #                 partner_lysimeter.shape[0] - 1
+            #             ]
+            #         ) or all(np.isnan(current_lysimeter_values)):
+            #             if (
+            #                 df.loc[df.shape[0] - 1, f"fill_{param.lower()}_code"]
+            #                 == None
+            #             ):
+            #                 df.loc[(df.shape[0] - 1), f"fill_{param.lower()}_code"] = -1
+            #                 df.loc[(df.shape[0] - 1), f"fill_{param.lower()}_msg"] = (
+            #                     "edge value"
+            #                 )
+            #         else:
+            #             # Linear regression model is created
+            #             model = sm.OLS(
+            #                 ols_df["current"].values.reshape(-1, 1),
+            #                 sm.add_constant(ols_df["partner"].values.reshape(-1, 1)),
+            #                 missing="drop",
+            #             )
+            #             lm = model.fit()
 
-                        # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
-                        if len(lm.params) == 1:
-                            lm.params = np.concatenate([np.array([0.0]), lm.params])
+            #             # Sometimes there is no intercept when it is exactly 0 --> add 0.0 as intercept
+            #             if len(lm.params) == 1:
+            #                 lm.params = np.concatenate([np.array([0.0]), lm.params])
 
-                        # Filling values are calculated by regression model
-                        result_value = (
-                            lm.params[0]
-                            + lm.params[1]
-                            * partner_lysimeter[partner_param].loc[
-                                partner_lysimeter.shape[0] - 1
-                            ]
-                        )
-                        # Values are filled in and flagged
-                        df.loc[(df.shape[0] - 1), param] = result_value
-                        df.loc[(df.shape[0] - 1), f"fill_{param.lower()}_code"] = 2
-                        df.loc[
-                            (df.shape[0] - 1), f"fill_{param.lower()}_msg"
-                        ] = f"lm with lysimeter {lysimeter_matches[location_summary][str(lysimeter_number)]}"
-                        df.loc[
-                            (df.shape[0] - 1), f"fill_{param.lower()}_groups"
-                        ] = group_counter
-                        group_counter += 1
+            #             # Filling values are calculated by regression model
+            #             result_value = (
+            #                 lm.params[0]
+            #                 + lm.params[1]
+            #                 * partner_lysimeter[partner_param].loc[
+            #                     partner_lysimeter.shape[0] - 1
+            #                 ]
+            #             )
+            #             # Values are filled in and flagged
+            #             df.loc[(df.shape[0] - 1), param] = result_value
+            #             df.loc[(df.shape[0] - 1), f"fill_{param.lower()}_code"] = 2
+            #             df.loc[(df.shape[0] - 1), f"fill_{param.lower()}_msg"] = (
+            #                 f"lm with lysimeter {lysimeter_matches[location_summary][str(lysimeter_number)]}"
+            #             )
+            #             df.loc[(df.shape[0] - 1), f"fill_{param.lower()}_groups"] = (
+            #                 group_counter
+            #             )
+            #             group_counter += 1
 
         # Write results to file
         ############################################################################################################
