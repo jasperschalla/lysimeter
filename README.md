@@ -13,7 +13,8 @@ Before the Pipeline is described, here is an overview of the repo in order to fi
 - `convert.sh` file for reacting to newly uploaded data from the loggers
 - `dashboard_clean.json` and `dashboard_raw.json` are the config files for the _Grafana_ dashboards for the clean and raw data
 - `docker-compose.yaml` and `Dockerfile` are the files for deployment of the whole pipeline and the watchdog, respectively
-- `resolve_date_errors.py`, `resolve_pipe_errors.py`, `resolve_pipe_errors.sh` and `resolve_post_errors.py` are files to run when the pipeline is deployed and different errors occur. _Date errors_ occurr when due to malfunction of the logger multiple dates are sent at one day. In order to also apply the other additional dates this error-handling script can be applied. _Pipe errors_ are errors when during the _LysiPipe_ module some errors occur and the whole pipeline needs to be rerun for a specific date/file. Similarly, _Post errors_ are only errors in the _postprocessing.py_ appear and a specific date/file needs to be rerun.
+- `resolve_date_errors.py`, `resolve_pipe_errors.py`, `resolve_pipe_errors.sh` and `resolve_post_errors.py` are files to run when the pipeline is deployed and different errors occur. _Date errors_ occurr when due to malfunction of the logger multiple dates are sent at one day. In order to also apply the other additional dates this error-handling script can be applied. _Pipe errors_ are errors when during the _LysiPipe_ module some errors occur and the whole pipeline needs to be rerun for a specific date/file. Similarly, _Post errors_ are only errors in the _postprocessing.py_ appear and a specific date/file needs to be rerun
+- `watcher.py` file for applying the watchdog
 
 All these different files etc. of the pipeline and its general structure will be explained in the following. Details that cannot be found here, can be found in the master thesis.
 
