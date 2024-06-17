@@ -42,7 +42,7 @@ In the following the detailed overview what happens in this component can be see
 
 When a new file is pushed to the rawdata directory, the _watcher.py_ file is activitated which results in that the newly added file is copied into a new directory and the bash script _convert.sh_ is applied.
 
-####2. File Type Conversion
+#### 2. File Type Conversion
 
 This script applies the C++ script _dumpdbd.cpp_ script that is able to convert over multiple other steps the .DBD file to a .csv file.
 
